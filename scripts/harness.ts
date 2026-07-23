@@ -12,9 +12,11 @@
 //
 // Run via `npm run eval` (esbuild bundles this TS + deps, see scripts/eval.mjs).
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { verify, type VerifyGate } from "../app/api/generate/verify";
 import { MOCK_PLAN, type LessonPlan } from "../app/api/generate/prompts/plan";
-import { MOCK_LESSON, BUILD_SYSTEM } from "../app/api/generate/prompts/build";
+import { MOCK_LESSON, BUILD_SYSTEM, buildPrompt } from "../app/api/generate/prompts/build";
 import { buildScope } from "../sandbox/sdk";
 import {
   liveTopLevelNames,
@@ -277,6 +279,19 @@ function runDocGate(): { failed: number; total: number } {
   check("prompt advertises no @status planned primitive", [
     ...[...plannedTopLevelNames()].filter((n) => advertised(n)).map((n) => `BUILD_SYSTEM advertises "${n}", which is @status planned.`),
     ...[...plannedPlotMembers()].filter((n) => advertised(n, true)).map((n) => `BUILD_SYSTEM advertises "Plot.${n}", which is @status planned.`),
+  ]);
+
+  // The few-shot is the golden lesson wearing a second hat. If it drifts, the
+  // prompt teaches an API the runtime no longer has — and the drift is silent,
+  // because both files still compile. (Found the hard way: a `\*` that KaTeX
+  // renders as a red error survived in both copies.)
+  const goldenBody = readFileSync(join(process.cwd(), "sdk/examples/newton.lesson.tsx"), "utf8")
+    .replace(/^\/\*[\s\S]*?\*\/\s*/, "")
+    .trimEnd();
+  check("few-shot is the golden lesson, verbatim", [
+    ...(buildPrompt(MOCK_PLAN).includes(goldenBody)
+      ? []
+      : ["prompts/build.ts FEWSHOT has drifted from sdk/examples/newton.lesson.tsx — run: node scripts/sync-fewshot.mjs"]),
   ]);
 
   console.log(`\n${failed ? RED : GREEN}${total - failed}/${total} documentation checks passed${RESET}\n`);

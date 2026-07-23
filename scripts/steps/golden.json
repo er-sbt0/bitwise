@@ -1,12 +1,23 @@
 [
+  { "eval": "window.scrollTo(0, document.querySelector('.bw-plot').getBoundingClientRect().top + window.scrollY - 16)" },
   { "screenshot": "golden-initial" },
   { "clickText": "Play one step" },
-  { "wait": 1500 },
+  { "wait": 700 },
+  { "screenshot": "golden-mid-draw" },
+  { "wait": 1200 },
   { "screenshot": "golden-after-one-step" },
+  { "drag": { "selector": "circle.mafs-movable-point-hitbox", "dx": 336, "dy": 0 } },
+  { "wait": 300 },
+  { "screenshot": "golden-after-drag" },
+  { "eval": "window.scrollTo(0, document.querySelectorAll('h2')[1].getBoundingClientRect().top + window.scrollY - 16)" },
   { "clickText": "Run" },
-  { "wait": 2500 },
+  { "wait": 4000 },
   { "screenshot": "golden-after-run" },
-  { "drag": { "selector": "circle[style*=\"cursor: grab\"]", "dx": 40, "dy": 0 } },
-  { "wait": 500 },
-  { "screenshot": "golden-after-drag" }
+  { "expectText": "1.7692" },
+  { "eval": "window.scrollTo(0, document.querySelector('.bw-plot').getBoundingClientRect().top + window.scrollY - 16)" },
+  { "clickText": "Play four steps" },
+  { "wait": 900 },
+  { "drag": { "selector": "circle.mafs-movable-point-hitbox", "dx": -120, "dy": 0 } },
+  { "wait": 600 },
+  { "screenshot": "golden-drag-cancels-animation" }
 ]

@@ -16,6 +16,9 @@
       content="default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <link rel="stylesheet" href="/katex.min.css" />
+    <!-- Mafs' core.css. Its font.css is intentionally absent: it @imports a
+         webfont, which connect-src 'none' above would block. -->
+    <link rel="stylesheet" href="/mafs-core.css" />
     <style>
       :root { color-scheme: light; }
       html, body { margin: 0; }
@@ -25,6 +28,23 @@
         padding: 24px;
       }
       #root { max-width: 720px; margin: 0 auto; }
+
+      /* Mafs ships a dark theme; the lesson surface is light. These have to sit
+         on .MafsView itself (that is the selector core.css declares them on),
+         and win by source order. */
+      .MafsView {
+        --mafs-bg: #fff;
+        --mafs-fg: #14171d;
+        --mafs-line-color: #e3e6ec;
+        --grid-line-subdivision-color: #f1f3f7;
+        --mafs-origin-color: #b7bdc9;
+      }
+      .bw-plot {
+        margin: 12px 0;
+        border: 1px solid #e3e6ec;
+        border-radius: 10px;
+        overflow: hidden;
+      }
     </style>
   </head>
   <body>

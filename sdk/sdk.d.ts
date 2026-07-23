@@ -407,7 +407,10 @@ export interface PlotProps {
   y?: [number, number]
   /** Grid style. */
   grid?: boolean | "cartesian" | "polar"
-  /** Lock aspect ratio so circles look round. Default true. */
+  /** Lock the aspect ratio so circles look round — at the cost of showing MORE
+   *  than `x`/`y` on whichever axis has slack. Default false: the region you
+   *  asked for is the region you get, stretched to fill `height`. Turn it on for
+   *  geometry (circles, angles, congruence); leave it off for graphs. */
   preserveAspect?: boolean
   height?: number
   children?: ReactNode

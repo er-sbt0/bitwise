@@ -253,7 +253,10 @@ Drag the guess below, then press **Play one step** to watch a single tangent sli
                     stroke="none"
                   />
                   <path
-                    d={\`M\${C[0]},\${C[1]} L\${C[0] - 9 * Math.cos(ang + 2.6)},\${C[1] - 9 * Math.sin(ang + 2.6)} M\${C[0]},\${C[1]} L\${C[0] - 9 * Math.cos(ang - 2.6)},\${C[1] - 9 * Math.sin(ang - 2.6)}\`}
+                    // Barbs sweep BACK from the tip: subtract a vector along the
+                    // direction of travel, splayed by ±0.4 rad. (A wide splay like
+                    // ±2.6 flips the sign of the cosine and throws them past C.)
+                    d={\`M\${C[0]},\${C[1]} L\${C[0] - 10 * Math.cos(ang + 0.4)},\${C[1] - 10 * Math.sin(ang + 0.4)} M\${C[0]},\${C[1]} L\${C[0] - 10 * Math.cos(ang - 0.4)},\${C[1] - 10 * Math.sin(ang - 0.4)}\`}
                     stroke="#e08a2f"
                     strokeWidth={2.5}
                     fill="none"
@@ -286,7 +289,7 @@ Drag the guess below, then press **Play one step** to watch a single tangent sli
         <Callout kind="note" title="Where the tangent lands">
           <Prose>{\`From $x_0 = \${fmt(x0)}$: the height is $f(x_0) = \${fmt(y0)}$ and the slope is
 $f'(x_0) = \${fmt(df(x0))}$, so the tangent crosses the axis at
-$x_1 = \${fmt(xNext)}$. The true root sits at $x^\\\\* \\\\approx \${fmt(root)}$.\`}</Prose>
+$x_1 = \${fmt(xNext)}$. The true root sits at $x^{*} \\\\approx \${fmt(root)}$.\`}</Prose>
         </Callout>
       </Section>
 

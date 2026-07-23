@@ -7,6 +7,11 @@ import React from "react";
 import { create, all } from "mathjs";
 import katex from "katex";
 import { marked } from "marked";
+import { useStage, setStageEmit } from "./stage/store";
+import { useMark } from "./stage/mark";
+import { useDirector, drawTo, transformTo, fadeTo, call, sequence, parallel, stagger, wait } from "./stage/director";
+import { useSimulation } from "./stage/sim";
+import { Plot, Custom } from "./stage/scene";
 
 const math = create(all, {});
 
@@ -14,6 +19,9 @@ const math = create(all, {});
 let emitFn: (event: string, data?: unknown) => void = () => {};
 export function setEmit(fn: (event: string, data?: unknown) => void) {
   emitFn = fn;
+  // The stage can't import this module (the dependency runs the other way), so
+  // it takes the same hook by injection and rides the same track() bridge.
+  setStageEmit(fn);
 }
 function track(event: string, data?: Record<string, unknown>) {
   emitFn(event, data);
@@ -122,17 +130,6 @@ function grade(spec: any, input: string): GradeResult {
   }
 }
 
-// ---- palette ----------------------------------------------------------------
-const COLORS: Record<string, string> = {
-  blue: "#2f6df0",
-  coral: "#e0554d",
-  green: "#2ca05a",
-  violet: "#7b5bd6",
-  orange: "#e08a2f",
-  ink: "#14171d",
-};
-const col = (c?: string) => COLORS[c ?? "blue"] ?? COLORS.blue;
-
 // ---- prose (markdown + KaTeX) -----------------------------------------------
 function renderProse(src: string): string {
   const parts: string[] = [];
@@ -166,6 +163,15 @@ function DisplayMath({ children, block }: { children: string; block?: boolean })
     />
   );
 }
+
+// A lesson needs BOTH `<Math>{"x^2"}</Math>` and `Math.abs(...)` — arithmetic is
+// plain JS, and the injected scope shadows the global. So the component also
+// carries every global Math static. Descriptor copy, not Object.assign: Math's
+// own properties are non-enumerable and assign would silently copy nothing.
+const MathScope = Object.defineProperties(
+  DisplayMath,
+  Object.getOwnPropertyDescriptors(globalThis.Math),
+) as typeof DisplayMath & typeof globalThis.Math;
 
 // ---- structure --------------------------------------------------------------
 function Section({ title, children }: { title?: string; children: React.ReactNode }) {
@@ -295,121 +301,6 @@ function NumberInput({ value, onChange, min, max, step = 1, label }: any) {
     </label>
   );
 }
-
-// ---- coordinate plane -------------------------------------------------------
-type PlotCtx = {
-  xToPx: (x: number) => number;
-  yToPx: (y: number) => number;
-  pxToX: (px: number) => number;
-  pxToY: (px: number) => number;
-  xd: [number, number];
-  yd: [number, number];
-  w: number;
-  h: number;
-  svgRef: React.RefObject<SVGSVGElement | null>;
-};
-const PlotContext = React.createContext<PlotCtx | null>(null);
-const usePlot = () => {
-  const c = React.useContext(PlotContext);
-  if (!c) throw new Error("Plot marks must be inside <Plot>");
-  return c;
-};
-
-function Plot(props: any) {
-  const w = 480;
-  const h = props.height ?? 320;
-  const pad = 26;
-  const xd: [number, number] = props.x ?? [-5, 5];
-  const yd: [number, number] = props.y ?? [-5, 5];
-  const svgRef = React.useRef<SVGSVGElement | null>(null);
-  const xToPx = (x: number) => pad + ((x - xd[0]) / (xd[1] - xd[0])) * (w - 2 * pad);
-  const yToPx = (y: number) => h - pad - ((y - yd[0]) / (yd[1] - yd[0])) * (h - 2 * pad);
-  const pxToX = (px: number) => xd[0] + ((px - pad) / (w - 2 * pad)) * (xd[1] - xd[0]);
-  const pxToY = (px: number) => yd[0] + ((h - pad - px) / (h - 2 * pad)) * (yd[1] - yd[0]);
-  const ctx: PlotCtx = { xToPx, yToPx, pxToX, pxToY, xd, yd, w, h, svgRef };
-
-  const gridLines: React.ReactNode[] = [];
-  for (let gx = Math.ceil(xd[0]); gx <= xd[1]; gx++) {
-    gridLines.push(<line key={`gx${gx}`} x1={xToPx(gx)} y1={pad} x2={xToPx(gx)} y2={h - pad} stroke="#eceef2" />);
-  }
-  for (let gy = Math.ceil(yd[0]); gy <= yd[1]; gy++) {
-    gridLines.push(<line key={`gy${gy}`} x1={pad} y1={yToPx(gy)} x2={w - pad} y2={yToPx(gy)} stroke="#eceef2" />);
-  }
-  return (
-    <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", maxWidth: w, border: "1px solid #e3e6ec", borderRadius: 10, background: "#fff", display: "block", margin: "12px 0", touchAction: "none" }}>
-      {gridLines}
-      {yd[0] <= 0 && yd[1] >= 0 && <line x1={pad} y1={yToPx(0)} x2={w - pad} y2={yToPx(0)} stroke="#b7bdc9" />}
-      {xd[0] <= 0 && xd[1] >= 0 && <line x1={xToPx(0)} y1={pad} x2={xToPx(0)} y2={h - pad} stroke="#b7bdc9" />}
-      <PlotContext.Provider value={ctx}>{props.children}</PlotContext.Provider>
-    </svg>
-  );
-}
-
-Plot.OfX = function OfX({ y, color }: { y: (x: number) => number; color?: string }) {
-  const { xd, w, xToPx, yToPx } = usePlot();
-  const n = 200;
-  const pts: string[] = [];
-  for (let i = 0; i <= n; i++) {
-    const x = xd[0] + ((xd[1] - xd[0]) * i) / n;
-    const yv = y(x);
-    if (isFinite(yv)) pts.push(`${xToPx(x).toFixed(1)},${yToPx(yv).toFixed(1)}`);
-    else pts.push("");
-  }
-  // split at gaps so asymptotes don't draw vertical lines
-  const segs = pts.join(" ").split(/\s{2,}|(?:^| )(?= )/).filter(Boolean);
-  return (
-    <>
-      {segs.map((seg, i) => (
-        <polyline key={i} points={seg} fill="none" stroke={col(color)} strokeWidth={2.5} />
-      ))}
-    </>
-  );
-};
-
-Plot.Point = function Point({ x, y, color, label }: any) {
-  const { xToPx, yToPx } = usePlot();
-  return (
-    <g>
-      <circle cx={xToPx(x)} cy={yToPx(y)} r={5} fill={col(color)} />
-      {label && (
-        <text x={xToPx(x) + 8} y={yToPx(y) - 8} fontSize={12} fill={col(color)}>
-          {label}
-        </text>
-      )}
-    </g>
-  );
-};
-
-Plot.MovablePoint = function MovablePoint({ x, y, onMove, color }: any) {
-  const { xToPx, yToPx, pxToX, pxToY, svgRef, xd, yd } = usePlot();
-  const dragging = React.useRef(false);
-  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
-  const move = (e: PointerEvent) => {
-    if (!dragging.current || !svgRef.current) return;
-    const r = svgRef.current.getBoundingClientRect();
-    const sx = (svgRef.current.viewBox.baseVal.width || r.width) / r.width;
-    const sy = (svgRef.current.viewBox.baseVal.height || r.height) / r.height;
-    const px = (e.clientX - r.left) * sx;
-    const py = (e.clientY - r.top) * sy;
-    onMove({ x: clamp(pxToX(px), xd[0], xd[1]), y: clamp(pxToY(py), yd[0], yd[1]) });
-  };
-  const up = () => {
-    dragging.current = false;
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-  };
-  const down = () => {
-    dragging.current = true;
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-  };
-  return (
-    <g>
-      <circle cx={xToPx(x)} cy={yToPx(y)} r={12} fill={col(color)} opacity={0.15} />
-      <circle cx={xToPx(x)} cy={yToPx(y)} r={7} fill={col(color)} stroke="#fff" strokeWidth={2} style={{ cursor: "grab" }} onPointerDown={down} />
-    </g>
-  );
-};
 
 // ---- assessment -------------------------------------------------------------
 function Exercise({ prompt, answer, input, solution, hints, onResult, children }: any) {
@@ -572,12 +463,26 @@ export function buildScope() {
     useCallback: React.useCallback,
     useLessonState,
     useTime,
+    // ---- the Stage (sandbox/stage/*) ----
+    useStage,
+    useMark,
+    useDirector,
+    useSimulation,
+    drawTo,
+    transformTo,
+    fadeTo,
+    call,
+    sequence,
+    parallel,
+    stagger,
+    wait,
+    Custom,
     track,
     fmt,
     math: mathAPI,
     Section,
     Prose,
-    Math: DisplayMath,
+    Math: MathScope,
     Callout,
     Steps,
     Step,

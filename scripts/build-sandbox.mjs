@@ -49,6 +49,33 @@ css = css.replace(/src:[^;}]+/g, (decl) => {
 });
 await writeFile(join(root, "public/katex.min.css"), css);
 
+// Mafs' core.css is MANDATORY, not cosmetic: `.MafsView` is where every
+// `--mafs-*` custom property and every `.mafs-movable-point-*` rule is defined,
+// so without it a draggable point renders invisible and unstyled.
+//
+// `font.css` is deliberately NOT shipped — it `@import`s the computer-modern
+// webfont over the network, which the sandbox CSP blocks (connect-src 'none').
+// core.css itself references no external asset today; the assert below is what
+// tells us if a future version starts to, since a url() would be CORS-blocked
+// from the sandbox's opaque origin and would need the same data: inlining.
+let mafsCss = await readFile(require.resolve("mafs/core.css"), "utf8");
+const external = mafsCss.match(/url\((?!['"]?data:)[^)]*\)|@import[^;]*/g);
+if (external) throw new Error(`mafs/core.css references external assets, inline them: ${external}`);
+
+// One rule has to go. `.MafsView path { stroke: var(--mafs-fg) }` is a default
+// for paths that don't set a stroke — but a CSS rule outranks a *presentation
+// attribute*, so it also overrides `stroke="#e08a2f"` / `stroke="none"` on every
+// path a lesson draws through <Custom>, silently outlining fills and recoloring
+// arrowheads. Mafs' own paths all set an inline `style.stroke`, so nothing of
+// Mafs' depends on it. Assert it exists: a version that renames it should make
+// us re-check rather than fail silently.
+const FG_PATH_RULE = /\.MafsView path \{\s*stroke: var\(--mafs-fg\);\s*\}\n*/;
+if (!FG_PATH_RULE.test(mafsCss)) throw new Error("mafs/core.css: `.MafsView path` rule not found — re-check the override");
+mafsCss = mafsCss.replace(FG_PATH_RULE, "");
+
+await writeFile(join(root, "public/mafs-core.css"), mafsCss);
+
 console.log(
-  `[build:sandbox] wrote public/sandbox-runtime.js + katex.min.css (${inlined} fonts inlined, ${(css.length / 1024) | 0} kB)`,
+  `[build:sandbox] wrote public/sandbox-runtime.js + katex.min.css (${inlined} fonts inlined, ` +
+    `${(css.length / 1024) | 0} kB) + mafs-core.css (${(mafsCss.length / 1024) | 0} kB)`,
 );
