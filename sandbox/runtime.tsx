@@ -112,4 +112,12 @@ window.addEventListener("error", (ev) => {
   post({ type: "error", phase: "runtime", id: "*", message: String(ev.error?.stack || ev.message) });
 });
 
+// ...and rejected promises, which `error` does not cover: a throw inside a
+// director beat surfaces as a rejected dir.play(), and without this the lesson
+// would fail silently instead of reaching the repair loop.
+window.addEventListener("unhandledrejection", (ev) => {
+  const r = ev.reason;
+  post({ type: "error", phase: "runtime", id: "*", message: String(r?.stack || r?.message || r) });
+});
+
 post({ type: "ready" });

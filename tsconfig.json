@@ -17,5 +17,9 @@
     "paths": { "@/*": ["./*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "sandbox", "sdk", "docs"]
+  // `sdk` and `docs` stay out: sdk/examples are lesson sources that reference
+  // injected globals (no imports, by design), and docs/ holds spike scratch.
+  // `sandbox` is IN — it is the runtime spine, and excluding it is how a NaN
+  // stroke-width survived the W1 spike unnoticed.
+  "exclude": ["node_modules", "sdk", "docs"]
 }
