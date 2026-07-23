@@ -1,24 +1,27 @@
 // The verifier — the machinery that earns ANSWER correctness. It runs AFTER the
 // compile gate and BEFORE a learner ever sees a lesson.
 //
-// Under the freeform-creative-runtime pivot the static allow-list is RETIRED: a
-// lesson may write arbitrary JS/JSX composing the injected std-lib, so a gate
-// that rejects unknown free identifiers would reject the whole point. What used
-// to be the allow-list's real job — "no imports, no network, no DOM escape" — is
+// Under the freeform-creative-runtime pivot the ALLOW-LIST is RETIRED: a lesson
+// may write arbitrary JS/JSX composing the injected std-lib, so a gate that
+// rejected unfamiliar constructs would reject the whole point. What used to be
+// the allow-list's real job — "no imports, no network, no DOM escape" — is
 // enforced by ISOLATION, not by this file: the cross-origin iframe, the CSP
-// (`connect-src 'none'`), and the `require` stub in sandbox/runtime.tsx. A name
-// that isn't in scope simply crashes at mount and is caught by the compile /
-// runtime-error gate plus the repair loop.
+// (`connect-src 'none'`), and the `require` stub in sandbox/runtime.tsx.
 //
 // What still gates here:
 //
 //   1. parse           — the code must be parseable at all (hard).
-//   2. answer-check    — every declarative <Exercise answer> is CAS-re-checked
+//   2. undefined-name  — a reference that cannot resolve to ANYTHING at mount
+//                        (hard). Note what this is NOT: it does not ask whether
+//                        a name is approved, only whether it exists. Every name
+//                        it rejects is a guaranteed ReferenceError, so it costs
+//                        the author no freedom at all.
+//   3. answer-check    — every declarative <Exercise answer> is CAS-re-checked
 //                        against the plan's canonical answer (and, where a
 //                        derivation is given, independently recomputed). This is
 //                        the whole correctness story now (hard).
-//   3. custom-grader   — `custom` graders can't be re-checked → flagged (soft).
-//   4. dead-interaction — a store set up but never read: the interaction changes
+//   4. custom-grader   — `custom` graders can't be re-checked → flagged (soft).
+//   5. dead-interaction — a store set up but never read: the interaction changes
 //                        nothing the learner can see (soft).
 //
 // The determinism boundary this rests on: visual/animation code may use the
@@ -39,6 +42,7 @@ import {
   type AnswerSpec,
 } from "./answers";
 import type { LessonPlan, Assessment } from "./prompts/plan";
+import { liveTopLevelNames } from "../../../sdk/surface";
 
 // Resolved lazily on first use, not at module load. Next.js's build-time
 // "Collecting page data" step imports this route to read its config exports;
@@ -71,7 +75,7 @@ function babel() {
 
 // ── findings ──────────────────────────────────────────────────────────────────
 
-export type VerifyGate = "parse" | "answer" | "custom-grader" | "dead-interaction";
+export type VerifyGate = "parse" | "undefined-name" | "answer" | "custom-grader" | "dead-interaction";
 
 export interface VerifyFinding {
   gate: VerifyGate;
@@ -134,6 +138,114 @@ function extractAnswers(code: string, ast: any): ExtractedAnswer[] {
     },
   });
   return out;
+}
+
+// ── names that cannot resolve at mount ───────────────────────────────────────
+//
+// The one failure this catches, in the author's words: LaTeX written as JSX
+// CHILDREN. `<Hint>Use \frac{d}{dx} a^x</Hint>` looks like prose, but JSX reads
+// `{d}` and `{dx}` as expression containers, so the lesson references two
+// variables named `d` and `dx` and dies with "ReferenceError: d is not defined"
+// — a stack trace pointing at a line of maths. Observed twice in live runs
+// before this gate existed.
+//
+// Two properties make it worth blocking on rather than leaving to the sandbox:
+//
+//   · it is DECIDABLE. A name bound nowhere in the module and absent from the
+//     injected scope resolves to nothing, no matter what the lesson does. This
+//     is not a taste judgement, so it cannot wrongly reject good work the way
+//     the old allow-list could.
+//   · it catches what MOUNTING CANNOT. A bad name inside an onClick handler
+//     mounts perfectly and then explodes under the learner's cursor. No amount
+//     of rendering finds that; reading the code does.
+//
+// The known set is derived, never hand-written: the SDK contract's `live` names
+// (which `npm run eval`'s doc gate proves equal to the runtime's injected scope,
+// in BOTH directions) plus the JS built-ins, read off this process's own global
+// object rather than listed here.
+
+/** Bindings the CommonJS wrapper and the sandbox's `new Function` supply. */
+const HOST_BINDINGS = ["React", "module", "exports", "require", "arguments", "globalThis"];
+
+let _known: Set<string> | null = null;
+
+/** Every name a lesson may reference and still resolve. Returns null when the
+ *  SDK contract can't be read — the gate then declines to run rather than
+ *  inventing a surface, and says so as a soft finding. */
+function knownNames(): Set<string> | null {
+  if (_known) return _known;
+  let live: Set<string>;
+  try {
+    live = liveTopLevelNames();
+  } catch {
+    return null;
+  }
+  _known = new Set([...live, ...HOST_BINDINGS, ...Object.getOwnPropertyNames(globalThis)]);
+  return _known;
+}
+
+/** References that resolve to nothing. Analysed on the TRANSPILED output, so
+ *  type annotations (erased) and JSX (already function calls) can't masquerade
+ *  as values — the input to this is exactly what the sandbox evaluates. */
+function undefinedNames(code: string): string[] {
+  const { traverse } = babel();
+  let compiled: string;
+  try {
+    compiled = String(
+      Babel.transform(code, {
+        filename: "lesson.tsx",
+        presets: [
+          ["react", { runtime: "classic" }],
+          ["typescript", { isTSX: true, allExtensions: true }],
+        ],
+        plugins: ["transform-modules-commonjs"],
+      }).code ?? "",
+    );
+  } catch {
+    // Unparseable — the compile gate owns that, and reporting it twice would
+    // send the repair loop after a defect it is already fixing.
+    return [];
+  }
+
+  const known = knownNames();
+  if (!known) return [];
+
+  const missing = new Set<string>();
+  traverse(parse(compiled), {
+    ReferencedIdentifier(path: any) {
+      const name = path.node.name;
+      if (missing.has(name)) return;
+      if (path.scope.getBinding(name)) return;
+      if (known.has(name)) return;
+      missing.add(name);
+    },
+  });
+  return [...missing];
+}
+
+function checkUndefinedNames(code: string): VerifyFinding[] {
+  if (!knownNames()) {
+    return [
+      {
+        gate: "undefined-name",
+        severity: "soft",
+        detail:
+          "the scope gate could not read sdk/sdk.d.ts, so nothing checked that every name the lesson uses actually exists — a bad reference will now surface as a runtime error at mount instead.",
+      },
+    ];
+  }
+  const missing = undefinedNames(code);
+  if (!missing.length) return [];
+  return [
+    {
+      gate: "undefined-name",
+      severity: "hard",
+      detail:
+        `the lesson references ${missing.map((n) => `"${n}"`).join(", ")}, which ${missing.length === 1 ? "is" : "are"} not defined anywhere — ` +
+        `not declared in the lesson, not part of the standard library, not a JavaScript built-in. This throws a ReferenceError the moment that code runs. ` +
+        `The usual cause is LaTeX written as JSX children (\`<Hint>\\frac{d}{dx}</Hint>\`), where JSX reads \`{d}\` as a variable: put the maths in a template string instead.`,
+    },
+  ];
 }
 
 /** State that is set up but never read — the same smell in both idioms:
@@ -274,6 +386,7 @@ export function verify(plan: LessonPlan, code: string): VerifyReport {
 
   const answers = extractAnswers(code, ast);
   const findings = [
+    ...checkUndefinedNames(code),
     ...checkAnswers(plan, answers),
     ...checkDeadInteractions(ast),
   ];

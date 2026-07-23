@@ -200,6 +200,40 @@ const FIXTURES: Fixture[] = [
     expect: { ok: false, gates: ["answer"] },
   },
   {
+    // The failure this gate was built for, seen twice in live runs: LaTeX
+    // written as JSX CHILDREN. JSX reads `{d}` and `{dx}` as expression
+    // containers, so the lesson references two variables that were never
+    // meant to be variables and dies with "ReferenceError: d is not defined".
+    name: "LaTeX as JSX children — invents names that resolve to nothing",
+    plan: noAssess,
+    code: skeleton("", `<Hint>Use \\frac{d}{dx} a^x to differentiate</Hint>`),
+    expect: { ok: false, gates: ["undefined-name"] },
+  },
+  {
+    // Same gate, the plain-typo shape — and inside a HANDLER, which mounting
+    // could never catch: the lesson renders fine and explodes on click.
+    name: "undefined name reachable only from a handler",
+    plan: noAssess,
+    code: skeleton(
+      `const s = useStage({ a: 1 })\n  const bump = () => s.set({ a: undeclaredHelper(s.a) })`,
+      `<Slider value={s.a} onChange={bump} min={0} max={5} />`,
+    ),
+    expect: { ok: false, gates: ["undefined-name"] },
+  },
+  {
+    // The gate must cost the author NO freedom: ordinary JS built-ins, custom
+    // helpers and locally-bound names all resolve, so none of them fire it.
+    name: "built-ins and custom helpers resolve — the gate isn't an allow-list",
+    plan: noAssess,
+    code: skeleton(
+      `const rows = Array.from({ length: 4 }, (_, i) => i)\n` +
+        `  const total = rows.reduce((a, b) => a + b, 0)\n` +
+        `  const label = new Intl.NumberFormat().format(total) + JSON.stringify([Math.PI, Number.EPSILON, Date.now()])`,
+      `<Prose>{\`\${label} \${fmt(total)}\`}</Prose>`,
+    ),
+    expect: { ok: true, gates: [] },
+  },
+  {
     // The only hard structural gate left. The compile step should catch this
     // first; verify() must not throw on it either way.
     name: "syntax error — unparseable code",
@@ -354,6 +388,15 @@ function runDocGate(): { failed: number; total: number } {
       ? []
       : ["prompts/build.ts FEWSHOT has drifted from sdk/examples/newton.lesson.tsx — run: node scripts/sync-fewshot.mjs"]),
   ]);
+
+  // The same truthfulness question asked of the ONE lesson the model imitates:
+  // every name the golden lesson uses must actually resolve at mount. A
+  // few-shot that references something the runtime lacks doesn't merely fail
+  // itself — it teaches the model to write the same crash into every lesson.
+  const goldenFindings = verify({ ...MOCK_PLAN, assessments: [] }, goldenBody).findings.filter(
+    (f) => f.gate === "undefined-name",
+  );
+  check("the golden lesson resolves every name it uses", goldenFindings.map((f) => f.detail));
 
   console.log(`\n${failed ? RED : GREEN}${total - failed}/${total} documentation checks passed${RESET}\n`);
   return { failed, total };

@@ -205,6 +205,16 @@ now, implement one substrate now.
   None of these had a red light anywhere; each was found by looking at a
   screenshot. `npm run test:recover` now guards the worst of them, because
   nothing else in the suite posts two lessons in a row.
+
+  **The one authoring failure that recurred** — LaTeX written as JSX *children*
+  (`<Hint>\frac{d}{dx}…</Hint>`), where JSX reads `{d}` as a variable and the
+  lesson dies on "ReferenceError: d is not defined". Now blocked before mount by
+  an **`undefined-name` gate**: a name bound nowhere in the module and absent
+  from the injected scope resolves to nothing, whatever the lesson does. Worth
+  being clear that this is *not* the allow-list coming back — it never asks
+  whether a name is approved, only whether it exists, so it costs the author no
+  freedom. It also catches what mounting cannot: a bad name inside an `onClick`
+  renders perfectly and explodes under the learner's cursor.
 - **Phase 3 — deepen & extend.** Richer director (transforms, morphing), broader
   vocabulary, the ODE-kernel → physics-engine path, more substrates
   (Canvas / WebGL / 3D).

@@ -122,6 +122,7 @@ LECTURE-FIRST RULES
 - Where the argument has a MOMENT — a construction being built, a step being taken — SCRIPT it with the director instead of describing it: a short sequence() the learner triggers with a button, with a call() that commits the result to the store.
 - REVEAL the essence explicitly, ideally in a <Callout kind="key-idea">.
 - Prose children is a single template-literal STRING. Do NOT nest JSX inside <Prose>. Put math as $...$ / $$...$$.
+- LaTeX NEVER goes in JSX text — not in <Hint>, <Option>, <Step>, <Callout>, anywhere. JSX reads a brace as an expression, so \`<Hint>Use \\frac{d}{dx}</Hint>\` references two variables named d and dx and the lesson dies with "ReferenceError: d is not defined". Always wrap it: \`<Hint><Prose>{\`Use $\\\\frac{d}{dx}$\`}</Prose></Hint>\`. A machine checks this before the lesson runs and blocks it.
 - Never write a computed number as a prose literal. Compute in JS and interpolate with \${fmt(...)} — JS does the arithmetic, not you.
 - Plot.OfX 'y' is a real JS function of x; keep it total (avoid dividing by zero across the domain).
 - Keep motion purposeful: short beats (roughly half a second), one idea per beat, and nothing that moves without explaining something.
