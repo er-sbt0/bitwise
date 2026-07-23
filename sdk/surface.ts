@@ -2,13 +2,15 @@
 // truth for the SDK surface; this module parses its `@tier`/`@status` tags into
 // a structured surface that every other consumer derives from:
 //
-//   • the verifier (app/api/generate/verify.ts) builds its allow-list from the
-//     LIVE names here — so a `planned` primitive is honestly rejected until the
-//     runtime implements it, instead of passing verify and crashing at mount;
 //   • the authoring prompt (prompts/build.ts) may only advertise LIVE names,
 //     enforced by the harness lint;
 //   • the eval harness cross-checks these LIVE names against the actual runtime
 //     scope (sandbox/sdk.tsx), failing on any drift in either direction.
+//
+// LIVE no longer feeds a verifier allow-list — that gate is retired (see
+// app/api/generate/verify.ts). It is DOCUMENTATION coverage now: a `planned`
+// primitive is simply not shown to the author, and the harness fails if the
+// contract and the runtime scope ever disagree.
 //
 // No other file may hand-maintain a list of SDK names. Grow the surface by
 // editing the contract, not by editing consumers.
@@ -28,9 +30,10 @@ export interface SdkEntry {
 }
 
 // ── baked fallback ───────────────────────────────────────────────────────────
-// Used only if sdk.d.ts can't be read (e.g. a bundled deploy where the source
-// file isn't shipped). Kept in sync with the contract by the harness drift gate,
-// which parses the real file — so a mismatch here surfaces in `npm run eval`.
+// Last-resort fallback, used only if sdk.d.ts can't be read (e.g. a bundled
+// deploy where the source file isn't shipped). Nothing checks it — the harness
+// parses the real file — so it can lag the contract; hand-refresh it when the
+// surface moves. Its only job is to keep a reader from seeing an empty surface.
 
 const BAKED: SdkEntry[] = [
   // top-level · live
@@ -142,7 +145,8 @@ export function sdkSurface(): SdkEntry[] {
 const namesOf = (kind: Kind, status: Status) =>
   new Set(sdkSurface().filter((e) => e.kind === kind && e.status === status).map((e) => e.name));
 
-/** Top-level SDK identifiers the runtime renders today → the verifier allow-list. */
+/** Top-level SDK identifiers the runtime renders today → what the prompt may
+ *  document, and what the harness expects to find in the runtime scope. */
 export function liveTopLevelNames(): Set<string> {
   return namesOf("top", "live");
 }
