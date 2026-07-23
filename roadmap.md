@@ -7,20 +7,27 @@ scope is fluid on purpose; this roadmap sequences the *engine*, which is the
 only durable thing we build.
 
 > **Status (2026-07-23).** M0 and M1 are **done**. M2 (the curriculum loop) is
-> **deferred by direction** — see below. The active focus is the
-> **Artifact quality & engine capability** track (Ma), which pulls M3's "range"
-> half and the Prompt/SDK cross-cutting track ahead of the loop. The guiding bet:
-> the durable value is the *generation engine*, so make each artifact excellent
-> and keep the loop dumb (type a concept → get a lesson).
+> **deferred by direction**. The active focus is the **Artifact quality & engine
+> capability** track (Ma), now steered by a **pivot (2026-07-23):** from a
+> *curated, verifier-gated widget set* to a **freeform creative runtime**. The
+> LLM composes a rich standard library — and writes custom draw/animate/simulate
+> code — freely; quality is judged by *observed output*, not a static allow-list.
+> The guiding bet is unchanged: the durable value is the *generation engine*, so
+> make each artifact excellent and keep the loop dumb (type a concept → get a
+> lesson). The bar we are aiming at is **brilliant.org-grade animation,
+> emulation, and explanation**.
 
 ## Guiding principles
 
 - **Vertical before horizontal.** Get one live lesson from prompt to pixels
   before making any single layer deep.
-- **The SDK is the contract; everything else is disposable.** Break lessons,
-  the curriculum, and the learner path freely — never the SDK without intent.
-- **Correctness is earned by machinery, not trust.** The CAS is the source of
-  truth for answers, never the model.
+- **The std-lib is a library, not a cage.** The SDK is a rich, typed standard
+  library the LLM composes — and extends with custom code — freely. `sdk.d.ts`
+  *documents* the surface; under the freeform pivot it no longer *gates* it.
+- **Answer-correctness is earned by machinery; visual craft is judged by output.**
+  The CAS stays the source of truth for graded answers, never the model. Visual
+  and interaction quality is gated by a render-and-inspect (vision) eval —
+  sequenced after the freeform slice — rather than by a static allow-list.
 - **The wait is the product too.** A minutes-long generation should read as
   craft via visible pipeline progress — but that polish is later, not M0.
 
@@ -90,48 +97,89 @@ answers and API violations before mount, and repair recovers most of them.
 
 ---
 
-## Ma — Artifact quality & engine capability (active focus) 🔨
+## Ma — The creative runtime: brilliant-grade artifacts (active focus) 🔨
 
-**Proves:** a single freshly authored lesson is *excellent* — its interactions
-span math's visual archetypes, every primitive is reactive/explorable, and the
-SDK contract the LLM authors against is truthful. This is where quality lives,
-independent of any curriculum loop.
+**Proves:** a single freshly authored lesson is *excellent* — brilliant.org-grade
+**animation, emulation, and explanation**. Motion is cinematic and purposeful,
+figures are interactive, simulations actually run, and the LLM has the
+programmatic freedom to build figures the engine's authors never anticipated.
 
-**Why here, ahead of M2.** Direction call (2026-07-23): the durable value is the
-generation engine, not session/orchestration logic. Keep the loop dumb (type a
-concept → get a lesson); pour the effort into the artifact. This track pulls M3's
-"range" half and the Prompt/SDK cross-cutting track ahead of the loop.
+**The pivot (2026-07-23).** We move from a *curated, verifier-gated widget set* to
+a **freeform creative runtime**:
+- **Freeform-first.** The LLM composes a rich **standard library** — and writes
+  custom draw/animate/simulate code — by default. The static allow-list gate is
+  **retired**; `sdk.d.ts` documents the std-lib surface rather than fencing it.
+- **Great defaults, not enforcement.** The engine still owns visual craft, but as
+  excellent defaults the model *reaches for*, not a fence it *cannot cross*.
+- **Judged by output.** Quality moves from static verification toward a
+  render-and-inspect eval — **freedom first, eval next** (the gate lands a phase
+  later; until then, runtime-error capture + the critic hold the line).
+- **Determinism relaxed.** Freeform code may use real time and randomness; we
+  accept that such artifacts aren't frame-reproducible, and the later eval adapts
+  (e.g. seeded fixtures / tolerance) rather than assuming exact frames.
 
-**Guiding requirements (endorsed)**
-- **R1 — archetype-spanning vocabulary.** Cover math's visual archetypes, not
-  just plot + slider (geometry constructions, number lines, diagrams, …).
-- **R2 — reactive by default.** Every primitive is explorable: state → observe,
-  the "see why" loop.
-- **R3 — engine owns craft, LLM owns intent.** Good visual defaults live in the
-  engine; the model supplies meaning, not pixels.
-- **R4 — truthful single source of truth for the SDK surface.** `sdk.d.ts` feeds
-  runtime, prompt docs, and the verifier allow-list — no drift. *(locked)*
-- **R5 — load-bearing interactions.** The plan commits to a central interaction;
-  the critic verifies the lesson actually depends on it (no dead widgets).
-- **R6 — render-and-inspect eval.** Screenshot + vision loop to judge the
-  rendered artifact, not just the source. *(deferred within this track)*
+**The core abstraction — the Stage.** One engine-owned clock, one reactive state
+store, one pure `render(state)`, and **three drivers** that write to state:
+- **interaction** — drag / slider / click (the learner perturbs the figure),
+- **direction** — a Manim-style timeline: `play(Transform(a,b))`, sequence, stagger,
+- **emulation** — a stepper: `step(state, dt)` (an ODE kernel now, physics later).
 
-**In scope (sequenced)**
-- **Phase 1 — single source of truth for the SDK surface (R4).** `sdk.d.ts`
-  becomes the one truthful contract; runtime, prompt docs, and verifier allow-list
-  all derive from it.
-- **Phase 2 — lead vocabulary expansion with `Geometry` constructions (R1/R2).**
-  The first archetype beyond plot+slider; reactive construction primitives.
-- Then: broaden vocabulary further, then stand up the R6 visual-eval loop.
+The point (an explicit design constraint): a figure can be a *guided animation the
+learner can also grab, while a simulation runs underneath* — **not a one-way
+video**. All three drivers reduce to the same "state changed → re-render"; a
+spring/tween layer smooths transitions.
 
-**Done when:** a single-concept lesson reliably reaches beyond plot+slider into a
-second visual archetype, its central interaction is load-bearing, and the SDK
-contract has no runtime/prompt/verifier drift.
+**Substrate-agnostic.** Author against the scene/std-lib; the substrate is a
+swappable renderer. **SVG (Mafs) first** — accessible and DOM-inspectable (which
+the future vision-eval wants); **Canvas** (dense/particles) and **WebGL/three**
+(3D) are additional renderers later, behind the same API. Build the abstraction
+now, implement one substrate now.
 
-**Not yet:** the curriculum loop (M2). Interaction stays type-a-concept → lesson.
+**Guiding requirements (updated by the pivot)**
+- **R1 — archetype-spanning vocabulary.** Cover math's visual archetypes across
+  substrates (geometry, vectors, number lines, curves, data, later 3D).
+- **R2 — reactive by default.** Every figure is explorable: state → observe.
+- **R3 — engine owns craft as *defaults*; LLM owns intent *and code*.** Good
+  visual defaults live in the engine; the model has full expressive freedom.
+- **R4 — std-lib, not allow-list.** `sdk.d.ts` is a typed, documented standard
+  library the LLM composes freely; the enforced allow-list gate is **retired**.
+  *(supersedes the former "locked" truthful-contract-as-cage)*
+- **R5 — load-bearing interactions.** The central interaction must matter; the
+  critic (not a static gate) checks the lesson actually depends on it.
+- **R6 — render-and-inspect eval.** Screenshot + vision grading of the rendered
+  artifact becomes the primary visual-quality gate — **sequenced after** the
+  freeform slice, not before it.
 
-**Quality axes that matter:** interaction richness & variety, and pedagogical
-depth & clarity — *not* topic breadth.
+**In scope (sequenced — vertical before horizontal)**
+- **Phase 1 — SSOT for the SDK surface. ✅ done, now repurposed.** `sdk.d.ts`
+  stays the one source of truth, but as std-lib *documentation*; its former role
+  as the verifier's hard allow-list is retired under freeform-first.
+- **Phase 2 — thin vertical slice of the creative runtime (next).** Go vertical:
+  a minimal **Stage** (one clock, pure render, the three drivers at a basic
+  level), a starter **std-lib** (SVG/Mafs substrate + a few marks + basic director
+  transitions + a basic simulation step), and **freeform authoring** (the LLM
+  writes custom code; the sandbox mounts it; errors + critic are the only gate).
+  Prove one freeform artifact that *animates, is interactive, and runs a basic
+  simulation*, end-to-end — then deepen.
+- **Phase 3 — deepen & extend.** Richer director (transforms, morphing), broader
+  vocabulary, the ODE-kernel → physics-engine path, more substrates
+  (Canvas / WebGL / 3D).
+- **Phase 4 — stand up the R6 vision-eval gate** (freedom first, eval next).
+
+**Candidate stack.** Draw: **Mafs** (SVG) → **Observable Plot**,
+**react-three-fiber** later. Animate: **Motion** / **react-spring** + a timeline
+sequencer (or **GSAP**); **flubber** / **d3-interpolate** for morphs. Simulate:
+in-house **RK4 + seeded RNG** → **Rapier** / **matter.js** later. Compute:
+**mathjs** (→ CAS). Explain: **KaTeX** + scroll/step binding.
+
+**Done when:** a single freeform-authored lesson reliably delivers a cinematic,
+interactive, simulation-backed figure end-to-end — mounted safely, repaired on
+error — even before the vision-eval gate lands.
+
+**Not yet:** the curriculum loop (M2); the R6 vision-eval gate (Phase 4).
+
+**Quality axes that matter:** animation & interaction richness, emulation depth,
+and pedagogical clarity — *not* topic breadth.
 
 ---
 
@@ -170,9 +218,10 @@ within the session.
 per-lesson cost.
 
 **In scope**
-- Grow the SDK from **core → ext tier**: more `Plot` marks (parametric,
-  inequality, vector, polygon), `NumberLine`, `Geometry` (JSXGraph), `Chart` /
-  `Distribution` for stats/probability, `Tween`/`useTime` motion.
+- **Vocabulary breadth largely moves up into Ma Phase 3** (std-lib expansion
+  across substrates — geometry, vectors, number lines, charts, 3D, motion). M3
+  keeps only the *economy-shaped* work below; "which archetypes" now lives in the
+  creative-runtime track.
 - Richer lesson shapes (multi-section walkthroughs, `Steps`, guided derivations).
 - **Model tiering + prompt caching** to hit the **~$0.25–0.75/lesson** target:
   fast model for routine widgets, Opus for hard/novel ones, cheap critic; cache
@@ -204,7 +253,10 @@ deferred non-goals come back on the table.
 - **Observability** — tracing from M0; cost/latency/failure dashboards grow with
   the pipeline.
 - **Eval harness** — starts M1, deepens every milestone; the main defense for a
-  system whose content is never hand-reviewed.
+  system whose content is never hand-reviewed. Under the freeform pivot it grows a
+  **render-and-inspect (vision) gate** for visual/interaction/emulation craft
+  (Ma Phase 4), since a static allow-list no longer holds that line.
 - **Prompt & SDK iteration** — the two highest-leverage surfaces; expect
-  constant tuning. `sdk.d.ts` stays the single source of truth for runtime,
-  prompt docs, and the verifier allow-list.
+  constant tuning. `sdk.d.ts` stays the single source of truth for the runtime
+  and prompt docs — as std-lib documentation; the enforced verifier allow-list is
+  retired under freeform-first.
