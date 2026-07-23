@@ -25,7 +25,12 @@
 // clock and randomness, but an answer spec must stay a static object literal —
 // `evalObjectLiteral` below reads it without executing the lesson.
 
-import Babel from "@babel/standalone";
+// NAMESPACE import, not a default one. @babel/standalone is CJS, and under
+// Next's server runtime `import Babel from …` resolves to undefined — so
+// `Babel.packages` threw, verify() reported a bogus `parse` finding, and the
+// CAS answer gate silently never ran on a live generation (checked=0). The eval
+// harness didn't catch it because esbuild's interop hands back the real module.
+import * as Babel from "@babel/standalone";
 import {
   answersAgree,
   recheckDerivation,
@@ -40,9 +45,21 @@ import type { LessonPlan, Assessment } from "./prompts/plan";
 // touching `Babel.packages` at top level crashes there because the property is
 // undefined in that evaluation context. Deferring to request time avoids it.
 let _babel: { parser: any; traverse: any; t: any } | null = null;
+
+/** Thrown when the verifier itself is broken, as opposed to the lesson being
+ *  bad. These must never be reported as findings: blaming the lesson for our
+ *  own fault sends the repair loop chasing a defect that isn't there, and — far
+ *  worse — lets the run finish with the CAS gate having checked nothing. */
+export class VerifierUnavailable extends Error {}
+
 function babel() {
   if (!_babel) {
-    const pkgs = (Babel as any).packages;
+    const pkgs = (Babel as any)?.packages;
+    if (!pkgs?.parser || !pkgs?.types || !pkgs?.traverse) {
+      throw new VerifierUnavailable(
+        "@babel/standalone did not expose .packages — the verifier cannot parse, so no answer can be re-checked.",
+      );
+    }
     _babel = {
       parser: pkgs.parser,
       traverse: pkgs.traverse.default || pkgs.traverse,
@@ -231,13 +248,16 @@ function checkAnswers(plan: LessonPlan, answers: ExtractedAnswer[]): VerifyFindi
 
 // ── entry point ──────────────────────────────────────────────────────────────
 
-/** Run every gate over the built code. Never throws — a parse failure is itself
- *  a hard finding (the compile gate should have caught it first). */
+/** Run every gate over the built code. Never throws *about the lesson* — a parse
+ *  failure is itself a hard finding (the compile gate should have caught it
+ *  first). A broken VERIFIER does throw: shipping content whose answers were
+ *  never checked is the one outcome this module exists to prevent. */
 export function verify(plan: LessonPlan, code: string): VerifyReport {
   let ast: any;
   try {
     ast = parse(code);
   } catch (e: any) {
+    if (e instanceof VerifierUnavailable) throw e;
     return {
       ok: false,
       checked: 0,
