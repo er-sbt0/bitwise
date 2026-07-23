@@ -9,7 +9,14 @@
 
 import { verify, type VerifyGate } from "../app/api/generate/verify";
 import { MOCK_PLAN, type LessonPlan } from "../app/api/generate/prompts/plan";
-import { MOCK_LESSON } from "../app/api/generate/prompts/build";
+import { MOCK_LESSON, BUILD_SYSTEM } from "../app/api/generate/prompts/build";
+import { buildScope } from "../sandbox/sdk";
+import {
+  liveTopLevelNames,
+  livePlotMembers,
+  plannedTopLevelNames,
+  plannedPlotMembers,
+} from "../sdk/surface";
 
 interface Fixture {
   name: string;
@@ -88,6 +95,18 @@ const FIXTURES: Fixture[] = [
     expect: { ok: false, gates: ["allowlist"] },
   },
   {
+    name: "planned primitive — <Geometry> declared but not implemented",
+    plan: noAssess,
+    code: skeleton("", `<Geometry bounds={[-5, 5, 5, -5]}><Prose>{\`x\`}</Prose></Geometry>`),
+    expect: { ok: false, gates: ["allowlist"] },
+  },
+  {
+    name: "planned Plot mark — <Plot.OfY> declared but not implemented",
+    plan: noAssess,
+    code: skeleton("", `<Plot x={[-5, 5]} y={[-5, 5]}><Plot.OfY x={(y) => y} /></Plot>`),
+    expect: { ok: false, gates: ["allowlist"] },
+  },
+  {
     name: "dead interaction — state set up but never read",
     plan: noAssess,
     code: skeleton(`const [a, setA] = useLessonState("a", 1)`, `<Slider value={1} onChange={setA} min={0} max={5} />`),
@@ -136,6 +155,71 @@ function runFixtures(): number {
   return failed;
 }
 
+// ── drift gate: contract ⟺ runtime ⟺ prompt ──────────────────────────────────
+// The standing proof that sdk/sdk.d.ts is a TRUTHFUL single source of truth.
+// A `@status live` name must be exactly what the runtime renders, and the
+// authoring prompt must never advertise a `@status planned` primitive. Any
+// disagreement here is drift — the class of bug this whole surface exists to
+// kill — so it fails the release gate.
+
+/** Names buildScope() injects that aren't SDK-declared (React plumbing). */
+const NON_SDK_SCOPE = new Set(["React"]);
+
+function diff(a: Set<string>, b: Set<string>): string[] {
+  return [...a].filter((x) => !b.has(x)).sort();
+}
+
+function runDriftGate(): number {
+  console.log(`Drift gate — contract ⟺ runtime ⟺ prompt\n`);
+  const problems: string[] = [];
+  const check = (label: string, issues: string[]) => {
+    const pass = issues.length === 0;
+    console.log(`  ${pass ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`} ${label}`);
+    for (const i of issues) {
+      console.log(`      ${DIM}${i}${RESET}`);
+      problems.push(`${label}: ${i}`);
+    }
+  };
+
+  const scope = buildScope();
+  const runtimeTop = new Set(Object.keys(scope).filter((k) => !NON_SDK_SCOPE.has(k)));
+  const liveTop = liveTopLevelNames();
+  check("top-level: every runtime primitive is @status live in the contract", [
+    ...diff(runtimeTop, liveTop).map(
+      (n) => `runtime injects "${n}" but the contract does not mark it @status live (add the tag, or stop injecting it).`,
+    ),
+  ]);
+  check("top-level: every @status live primitive exists in the runtime", [
+    ...diff(liveTop, runtimeTop).map(
+      (n) => `contract marks "${n}" @status live but the runtime doesn't implement it (implement it, or set @status planned).`,
+    ),
+  ]);
+
+  const runtimePlot = new Set(Object.keys((scope.Plot ?? {}) as object));
+  const livePlot = livePlotMembers();
+  check("Plot marks: runtime ⟺ @status live", [
+    ...diff(runtimePlot, livePlot).map((n) => `runtime has Plot.${n} but contract doesn't mark it @status live.`),
+    ...diff(livePlot, runtimePlot).map((n) => `contract marks Plot.${n} @status live but the runtime lacks it.`),
+  ]);
+
+  // The prompt may describe only live primitives — never advertise a planned one.
+  const advertised = (name: string, member = false) => {
+    const pat = member
+      ? new RegExp(`Plot\\.${name}\\b`)
+      : new RegExp(`<${name}\\b|\\b${name}\\s*\\(|\\b${name}=`);
+    return pat.test(BUILD_SYSTEM);
+  };
+  check("prompt advertises no @status planned primitive", [
+    ...[...plannedTopLevelNames()].filter((n) => advertised(n)).map((n) => `BUILD_SYSTEM advertises "${n}", which is @status planned.`),
+    ...[...plannedPlotMembers()].filter((n) => advertised(n, true)).map((n) => `BUILD_SYSTEM advertises "Plot.${n}", which is @status planned.`),
+  ]);
+
+  const total = 4;
+  const failed = problems.length ? 1 : 0; // any drift fails the gate
+  console.log(`\n${problems.length ? RED : GREEN}${total - (problems.length ? 1 : 0)}/${total} drift checks passed${RESET}\n`);
+  return failed;
+}
+
 // ── optional: live batch generation (--live [N]) ─────────────────────────────
 
 const LIVE_CONCEPTS = [
@@ -173,7 +257,7 @@ async function runLive(n: number): Promise<number> {
 }
 
 export async function run(argv: string[]): Promise<number> {
-  let failed = runFixtures();
+  let failed = runDriftGate() + runFixtures();
   const liveIdx = argv.indexOf("--live");
   if (liveIdx !== -1) {
     const n = Number(argv[liveIdx + 1]) || LIVE_CONCEPTS.length;

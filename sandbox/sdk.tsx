@@ -153,7 +153,11 @@ function Prose({ children }: { children: string }) {
   return <div dangerouslySetInnerHTML={{ __html: renderProse(children ?? "") }} />;
 }
 
-function Math({ children, block }: { children: string; block?: boolean }) {
+// NOTE: named DisplayMath, not Math — a local `function Math` would shadow the
+// global `Math` for the whole module, turning every `Math.ceil/abs/min/...` call
+// below into a call on this component (→ runtime throw). Exposed to lessons as
+// `Math` via buildScope().
+function DisplayMath({ children, block }: { children: string; block?: boolean }) {
   return (
     <span
       dangerouslySetInnerHTML={{
@@ -573,7 +577,7 @@ export function buildScope() {
     math: mathAPI,
     Section,
     Prose,
-    Math,
+    Math: DisplayMath,
     Callout,
     Steps,
     Step,

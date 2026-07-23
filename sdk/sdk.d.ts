@@ -5,18 +5,28 @@
  * sandbox. A lesson is a default-exported React component that composes these
  * primitives. No imports, no network, no DOM escape.
  *
- * This file is the single source of truth: the runtime implements it, the
- * authoring prompt is generated from its JSDoc, and the verifier's allow-list
- * is the set of names it declares.
+ * This file is the SINGLE SOURCE OF TRUTH for the SDK surface. One parser,
+ * `sdk/surface.ts`, reads the annotations below; from it the verifier derives
+ * its allow-list, the authoring prompt derives what it may advertise, and the
+ * eval harness cross-checks the runtime. Nothing else may hand-maintain a list
+ * of SDK names — change the surface by editing THIS file.
  *
- * ── Tiers ───────────────────────────────────────────────────────────────────
- * CORE  — the v0 subset the runtime implements first and the prompt ships with:
- *           useLessonState, fmt, math, Section, Prose, Callout, Reveal, Hint,
- *           Plot (+ OfX, Point, MovablePoint), Slider, Toggle, NumberInput,
- *           Exercise, MultipleChoice, Option.
- * EXT   — everything else. Implement as lessons start asking for it. Because
- *           lessons are ephemeral there is no migration cost to growing this.
- * Each declaration is tagged `@tier core | ext`.
+ * Every declaration (and every `Plot.*` member) carries two tags:
+ *
+ * ── @tier core | ext ─── curation. What belongs in the essential vocabulary.
+ *   CORE — the vocabulary a lesson almost always reaches for.
+ *   EXT  — richer/rarer primitives, grown as lessons ask for them.
+ *
+ * ── @status live | planned ─── truth. Whether the runtime renders it TODAY.
+ *   LIVE     — implemented in `sandbox/sdk.tsx` (`buildScope`) right now. Only
+ *              live names are permitted by the verifier and advertised to the
+ *              author. The harness fails if this disagrees with the runtime.
+ *   PLANNED  — declared here as intent, NOT yet implemented. Invisible to the
+ *              verifier and the prompt until its `@status` flips to `live`.
+ *
+ * tier and status are independent: a primitive can be `ext` yet `live`
+ * (e.g. `Steps`), or `core`-worthy yet still `planned`. The verifier and prompt
+ * key off @status; @tier is informational curation.
  */
 
 import type { ReactNode } from "react"
@@ -69,7 +79,7 @@ export interface MathAPI {
 
 /** The math engine. Use this (or plain JS arithmetic) instead of ever writing
  *  a computed number as a prose literal.
- *  @tier core */
+ *  @tier core @status live */
 export declare const math: MathAPI
 
 /**
@@ -77,7 +87,7 @@ export declare const math: MathAPI
  * ``<Prose>{`The vertex is at (${fmt(h)}, ${fmt(k)}).`}</Prose>``.
  * Rounds sensibly and strips float noise like `0.30000000000000004`.
  * This is the sanctioned way to put a computed value into text.
- * @tier core
+ * @tier core @status live
  */
 export declare function fmt(value: number, digits?: number): string
 
@@ -92,7 +102,7 @@ export declare function fmt(value: number, digits?: number): string
  *
  * @param key      Unique key within this lesson.
  * @param initial  Initial value.
- * @tier core
+ * @tier core @status live
  */
 export declare function useLessonState<T>(
   key: string,
@@ -100,19 +110,26 @@ export declare function useLessonState<T>(
 ): [T, (next: T | ((prev: T) => T)) => void]
 
 /** Elapsed seconds since mount, for animations. Auto-pauses when the tab is
- *  hidden and returns a frozen value under `prefers-reduced-motion`. */
+ *  hidden and returns a frozen value under `prefers-reduced-motion`.
+ *  @tier ext @status live */
 export declare function useTime(options?: { paused?: boolean }): number
 
 /** Emit a custom telemetry event. Exercises and controls emit automatically;
- *  use this only for bespoke interactions worth measuring. */
+ *  use this only for bespoke interactions worth measuring.
+ *  @tier ext @status live */
 export declare function track(event: string, data?: Record<string, unknown>): void
 
-// Standard React hooks are also in scope: useState, useEffect, useMemo,
-// useRef, useCallback. Prefer useLessonState for anything a learner changes.
+// Standard React hooks are also in scope. Prefer useLessonState for anything a
+// learner changes.
+/** @tier core @status live */
 export declare const useState: typeof import("react").useState
+/** @tier core @status live */
 export declare const useEffect: typeof import("react").useEffect
+/** @tier core @status live */
 export declare const useMemo: typeof import("react").useMemo
+/** @tier core @status live */
 export declare const useRef: typeof import("react").useRef
+/** @tier core @status live */
 export declare const useCallback: typeof import("react").useCallback
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -120,7 +137,7 @@ export declare const useCallback: typeof import("react").useCallback
 // ────────────────────────────────────────────────────────────────────────────
 
 /** A titled unit of the lesson. Lessons are a sequence of `<Section>`s.
- *  @tier core */
+ *  @tier core @status live */
 export declare function Section(props: {
   title?: string
   children: ReactNode
@@ -136,35 +153,39 @@ export declare function Section(props: {
  * <Prose>{`The vertex sits at $(${fmt(h)}, ${fmt(k)})$.`}</Prose>
  * ```
  * Never type a computed number as a literal — interpolate it.
- * @tier core
+ * @tier core @status live
  */
 export declare function Prose(props: { children: string }): JSX.Element
 
 /** Standalone rendered equation, for a display formula outside prose flow.
  *  Most math should just live in `<Prose>`; use this only when you want an
  *  equation on its own with no surrounding text.
- *  @tier ext */
+ *  @tier ext @status live */
 export declare function Math(props: {
   children: string
   block?: boolean
 }): JSX.Element
 
 /** A highlighted note. `kind` sets the tone/color.
- *  @tier core */
+ *  @tier core @status live */
 export declare function Callout(props: {
   kind?: "note" | "tip" | "warning" | "key-idea"
   title?: string
   children: ReactNode
 }): JSX.Element
 
-/** Ordered walkthrough. Steps reveal one at a time as the learner advances. */
+/** Ordered walkthrough. Steps reveal one at a time as the learner advances.
+ *  @tier ext @status live */
 export declare function Steps(props: { children: ReactNode }): JSX.Element
+/** One beat of a `<Steps>` walkthrough. @tier ext @status live */
 export declare function Step(props: { title?: string; children: ReactNode }): JSX.Element
 
-/** Click-to-reveal, for "try it before you see it" moments. */
+/** Click-to-reveal, for "try it before you see it" moments.
+ *  @tier core @status live */
 export declare function Reveal(props: { label?: string; children: ReactNode }): JSX.Element
 
-/** Progressive hints for the nearest enclosing exercise, revealed in order. */
+/** Progressive hints for the nearest enclosing exercise, revealed in order.
+ *  @tier core @status live */
 export declare function Hint(props: { children: ReactNode }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -184,22 +205,22 @@ export interface PlotProps {
 }
 
 export interface PlotComponent {
-  /** @tier core */
+  /** The plotting surface itself. @tier core @status live */
   (props: PlotProps): JSX.Element
-  /** Plot `y = f(x)`. @tier core */
+  /** Plot `y = f(x)`. @tier core @status live */
   OfX(props: { y: Fn1; color?: Color; style?: LineStyle }): JSX.Element
-  /** Plot `x = f(y)`. */
+  /** Plot `x = f(y)`. @tier ext @status planned */
   OfY(props: { x: Fn1; color?: Color; style?: LineStyle }): JSX.Element
-  /** Parametric curve over `t ∈ [t0, t1]`. */
+  /** Parametric curve over `t ∈ [t0, t1]`. @tier ext @status planned */
   Parametric(props: {
     xy: (t: number) => [number, number]
     t: [number, number]
     color?: Color
   }): JSX.Element
-  /** A static point with optional label. @tier core */
+  /** A static point with optional label. @tier core @status live */
   Point(props: { x: number; y: number; color?: Color; label?: string }): JSX.Element
   /** A draggable point. Wire `onMove` to state to drive the rest of the lesson.
-   *  @tier core */
+   *  @tier core @status live */
   MovablePoint(props: {
     x: number
     y: number
@@ -207,22 +228,31 @@ export interface PlotComponent {
     constrain?: "horizontal" | "vertical" | ((p: { x: number; y: number }) => { x: number; y: number })
     color?: Color
   }): JSX.Element
+  /** @tier ext @status planned */
   Segment(props: { from: [number, number]; to: [number, number]; color?: Color }): JSX.Element
+  /** @tier ext @status planned */
   Vector(props: { tip: [number, number]; tail?: [number, number]; color?: Color }): JSX.Element
+  /** @tier ext @status planned */
   Line(props: { point: [number, number]; slope: number; color?: Color }): JSX.Element
+  /** @tier ext @status planned */
   Polygon(props: { points: [number, number][]; color?: Color; fillOpacity?: number }): JSX.Element
+  /** @tier ext @status planned */
   Circle(props: { center: [number, number]; radius: number; color?: Color }): JSX.Element
-  /** Shade the region where `expr(x, y)` compares to 0. */
+  /** Shade the region where `expr(x, y)` compares to 0. @tier ext @status planned */
   Inequality(props: { fn: (x: number, y: number) => number; op: "<" | ">" | "<=" | ">="; color?: Color }): JSX.Element
+  /** @tier ext @status planned */
   Text(props: { x: number; y: number; children: string }): JSX.Element
 }
 
+/** Interactive coordinate plane. Marks are children (`<Plot.OfX/>`, …).
+ *  @tier core @status live */
 export declare const Plot: PlotComponent
 
 export type Color = "blue" | "coral" | "green" | "violet" | "orange" | "ink"
 export type LineStyle = "solid" | "dashed" | "dotted"
 
-/** A number line for 1-D concepts (intervals, inequalities, sequences). */
+/** A number line for 1-D concepts (intervals, inequalities, sequences).
+ *  @tier ext @status planned */
 export declare function NumberLine(props: {
   range: [number, number]
   ticks?: number
@@ -231,7 +261,8 @@ export declare function NumberLine(props: {
 }): JSX.Element
 
 /** Geometry constructions (compass/straightedge, angles, transforms).
- *  Backed by JSXGraph for constructions Mafs doesn't cover. */
+ *  Backed by JSXGraph for constructions Mafs doesn't cover.
+ *  @tier ext @status planned */
 export declare function Geometry(props: {
   bounds?: [number, number, number, number]
   children: ReactNode
@@ -241,6 +272,7 @@ export declare function Geometry(props: {
 // 5 · Charts  (data / statistics / probability — backed by a small chart layer)
 // ────────────────────────────────────────────────────────────────────────────
 
+/** Data/statistics chart. @tier ext @status planned */
 export declare function Chart(props: {
   kind: "bar" | "line" | "scatter" | "histogram" | "box"
   data: number[] | { x: number; y: number }[]
@@ -249,7 +281,8 @@ export declare function Chart(props: {
   yLabel?: string
 }): JSX.Element
 
-/** Plot a named probability distribution with tunable parameters. */
+/** Plot a named probability distribution with tunable parameters.
+ *  @tier ext @status planned */
 export declare function Distribution(props: {
   kind: "normal" | "binomial" | "poisson" | "uniform" | "exponential"
   params: Scope
@@ -260,7 +293,7 @@ export declare function Distribution(props: {
 // 6 · Controls
 // ────────────────────────────────────────────────────────────────────────────
 
-/** @tier core */
+/** A value slider — the workhorse explore control. @tier core @status live */
 export declare function Slider(props: {
   value: number
   onChange: (v: number) => void
@@ -272,6 +305,7 @@ export declare function Slider(props: {
   showValue?: boolean
 }): JSX.Element
 
+/** A two-handle range slider. @tier ext @status planned */
 export declare function RangeSlider(props: {
   value: [number, number]
   onChange: (v: [number, number]) => void
@@ -281,12 +315,14 @@ export declare function RangeSlider(props: {
   label?: string
 }): JSX.Element
 
+/** A boolean switch. @tier core @status live */
 export declare function Toggle(props: {
   checked: boolean
   onChange: (v: boolean) => void
   label?: string
 }): JSX.Element
 
+/** A numeric text input. @tier core @status live */
 export declare function NumberInput(props: {
   value: number
   onChange: (v: number) => void
@@ -296,6 +332,7 @@ export declare function NumberInput(props: {
   label?: string
 }): JSX.Element
 
+/** A labelled select. @tier ext @status planned */
 export declare function Dropdown<T extends string>(props: {
   value: T
   onChange: (v: T) => void
@@ -332,8 +369,8 @@ export type AnswerSpec =
 /**
  * A graded exercise with a typed input. Provide `<Hint>` children for
  * progressive help and `solution` for the reveal after solving/giving up.
+ * @tier core @status live
  */
-/** @tier core */
 export declare function Exercise(props: {
   prompt: ReactNode
   answer: AnswerSpec
@@ -347,7 +384,7 @@ export declare function Exercise(props: {
   children?: ReactNode
 }): JSX.Element
 
-/** Convenience for single/multi-select questions. @tier core */
+/** Convenience for single/multi-select questions. @tier core @status live */
 export declare function MultipleChoice(props: {
   prompt: ReactNode
   /** Index (or indices) of the correct option(s). */
@@ -357,13 +394,15 @@ export declare function MultipleChoice(props: {
   children: ReactNode // <Option> elements
 }): JSX.Element
 
+/** One choice inside `<MultipleChoice>`. @tier core @status live */
 export declare function Option(props: { children: ReactNode }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
 // 8 · Motion
 // ────────────────────────────────────────────────────────────────────────────
 
-/** Interpolate a value over `duration` seconds. Honors reduced-motion. */
+/** Interpolate a value over `duration` seconds. Honors reduced-motion.
+ *  @tier ext @status planned */
 export declare function Tween(props: {
   from: number
   to: number

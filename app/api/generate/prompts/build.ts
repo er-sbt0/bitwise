@@ -2,6 +2,12 @@
 // lesson component against the SDK core tier. Lecture-first: the lesson is a
 // taught argument (motivate -> develop -> reveal), interactions ILLUSTRATE the
 // reasoning, and exercises are optional rather than the point.
+//
+// The "THE SDK" block below is a CURATED subset of the live surface — it may
+// name only primitives the runtime renders today (@status live in sdk/sdk.d.ts).
+// The eval harness drift gate fails if this prompt ever advertises a `@status
+// planned` primitive, so the prompt can't drift ahead of the runtime. When a
+// planned primitive goes live (Phase 2+), add it here to start using it.
 
 import type { LessonPlan } from "./plan";
 import { describeAnswer } from "../answers";

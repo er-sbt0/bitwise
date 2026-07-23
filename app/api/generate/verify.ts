@@ -2,18 +2,19 @@
 // compile gate and BEFORE a learner ever sees a lesson, and enforces four
 // independent gates on the built code:
 //
-//   1. allow-list   — only @tier SDK identifiers + JS built-ins + React.
+//   1. allow-list   — only LIVE SDK identifiers (+ live Plot marks) + JS
+//                      built-ins + React. Declared-but-unimplemented (@status
+//                      planned) primitives are rejected, not silently allowed.
 //   2. answer-check  — every declarative <Exercise answer> is CAS-re-checked
 //                      against the plan's canonical answer (and, where a
 //                      derivation is given, independently recomputed).
 //   3. custom-grader — `custom` graders can't be re-checked → flagged higher-risk.
 //   4. dead-interaction — interactive state that is set up but never read.
 //
-// sdk/sdk.d.ts stays the single source of truth: the allow-list is parsed from
-// it at load time, so adding an SDK primitive automatically permits it here.
+// sdk/sdk.d.ts stays the single source of truth: sdk/surface.ts parses its
+// @status tags, and this allow-list is the LIVE set — so flipping a primitive to
+// @status live (once the runtime implements it) automatically permits it here.
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import Babel from "@babel/standalone";
 import {
   answersAgree,
@@ -23,6 +24,12 @@ import {
   type AnswerSpec,
 } from "./answers";
 import type { LessonPlan, Assessment } from "./prompts/plan";
+import {
+  liveTopLevelNames,
+  livePlotMembers,
+  plannedTopLevelNames,
+  plannedPlotMembers,
+} from "../../../sdk/surface";
 
 const parser = (Babel as any).packages.parser;
 const traverse = (Babel as any).packages.traverse.default || (Babel as any).packages.traverse;
@@ -46,7 +53,7 @@ export interface VerifyReport {
   checked: number;
 }
 
-// ── allow-list, parsed from the SDK contract ─────────────────────────────────
+// ── allow-list, derived from the SDK contract (via sdk/surface.ts) ───────────
 
 /** JS globals a lesson may reference. Deliberately small and pure — no I/O, no
  *  clock, no randomness (lessons must be deterministic to be re-checkable). */
@@ -59,34 +66,12 @@ const JS_BUILTINS = new Set([
 /** React is injected into the sandbox as a global, along with its hooks. */
 const REACT_GLOBALS = new Set(["React", "Fragment"]);
 
-let sdkNamesCache: Set<string> | null = null;
-
-/** Exported @tier identifiers, parsed from sdk/sdk.d.ts (the single source of
- *  truth). Falls back to a baked-in core set if the file can't be read. */
-function sdkNames(): Set<string> {
-  if (sdkNamesCache) return sdkNamesCache;
-  const baked = [
-    "useLessonState", "useTime", "track", "fmt", "math", "Section", "Prose",
-    "Math", "Callout", "Steps", "Step", "Reveal", "Hint", "Plot", "NumberLine",
-    "Geometry", "Chart", "Distribution", "Slider", "RangeSlider", "Toggle",
-    "NumberInput", "Dropdown", "Exercise", "MultipleChoice", "Option", "Tween",
-    "useState", "useEffect", "useMemo", "useRef", "useCallback",
-  ];
-  const names = new Set(baked);
-  try {
-    const src = readFileSync(join(process.cwd(), "sdk", "sdk.d.ts"), "utf8");
-    const re = /export declare (?:function|const)\s+(\w+)/g;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(src))) names.add(m[1]);
-  } catch {
-    /* keep baked set */
-  }
-  sdkNamesCache = names;
-  return names;
-}
-
+/** A lesson may reference an SDK name only if the runtime renders it TODAY
+ *  (@status live). A `planned` primitive is declared in the contract but not yet
+ *  implemented — permitting it would let a lesson pass verify and then crash at
+ *  mount, which is exactly the drift this gate exists to stop. */
 function isAllowed(name: string): boolean {
-  return sdkNames().has(name) || JS_BUILTINS.has(name) || REACT_GLOBALS.has(name);
+  return liveTopLevelNames().has(name) || JS_BUILTINS.has(name) || REACT_GLOBALS.has(name);
 }
 
 // ── parsing ──────────────────────────────────────────────────────────────────
@@ -98,9 +83,17 @@ function parse(code: string) {
   });
 }
 
-/** Free identifiers referenced but not declared anywhere and not allow-listed. */
+/** Free identifiers referenced but not declared anywhere and not allow-listed,
+ *  plus `Plot.*` marks the runtime doesn't render. Both are truthfulness gates:
+ *  a name is permitted only if it maps to something the sandbox can actually
+ *  mount today. */
 function checkAllowlist(ast: any): VerifyFinding[] {
   const bad = new Set<string>();
+  const badPlot = new Set<string>();
+  const planned = plannedTopLevelNames();
+  const liveMembers = livePlotMembers();
+  const plannedMembers = plannedPlotMembers();
+
   traverse(ast, {
     ReferencedIdentifier(path: any) {
       const { node, parent } = path;
@@ -114,12 +107,42 @@ function checkAllowlist(ast: any): VerifyFinding[] {
       if (t.isMemberExpression(parent) && parent.property === node && !parent.computed) return;
       bad.add(name);
     },
+    // `Plot.OfX(...)` — the property side is skipped above, so check it here.
+    MemberExpression(path: any) {
+      const { node } = path;
+      if (node.computed) return;
+      if (!t.isIdentifier(node.object) || node.object.name !== "Plot") return;
+      if (path.scope.getBinding("Plot")) return; // shadowed local, not the SDK global
+      if (!t.isIdentifier(node.property)) return;
+      if (!liveMembers.has(node.property.name)) badPlot.add(node.property.name);
+    },
+    // `<Plot.OfX/>` — marks are used as JSX, a distinct node type from the above.
+    JSXMemberExpression(path: any) {
+      const { node } = path;
+      if (!t.isJSXIdentifier(node.object) || node.object.name !== "Plot") return;
+      if (path.scope.getBinding("Plot")) return;
+      if (!t.isJSXIdentifier(node.property)) return;
+      if (!liveMembers.has(node.property.name)) badPlot.add(node.property.name);
+    },
   });
-  return [...bad].map((name) => ({
+
+  const findings: VerifyFinding[] = [...bad].map((name) => ({
     gate: "allowlist" as const,
     severity: "hard" as const,
-    detail: `"${name}" is not an SDK @tier identifier, a JS built-in, or React — lessons may only use the SDK.`,
+    detail: planned.has(name)
+      ? `"${name}" is declared in the SDK but not implemented yet (@status planned) — it would crash at mount. Use a live primitive instead.`
+      : `"${name}" is not an SDK identifier, a JS built-in, or React — lessons may only use the SDK.`,
   }));
+  for (const member of badPlot) {
+    findings.push({
+      gate: "allowlist",
+      severity: "hard",
+      detail: plannedMembers.has(member)
+        ? `"Plot.${member}" is declared but not implemented yet (@status planned) — it would crash at mount. Use a live Plot mark instead.`
+        : `"Plot.${member}" is not a Plot mark — check the SDK for available marks.`,
+    });
+  }
+  return findings;
 }
 
 /** An answer spec pulled off an <Exercise>. `spec` is null for custom/unparseable. */
