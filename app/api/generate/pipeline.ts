@@ -22,12 +22,21 @@ const MAX_COMPILE_REPAIRS = 2;
 const MAX_VERIFY_REPAIRS = 2;
 const MAX_REFINES = 1;
 
-export type StageStatus = "ok" | "repair" | "revise" | "skip" | "error";
+export type StageStatus = "start" | "ok" | "repair" | "revise" | "skip" | "error";
 export interface StageEvent {
   stage: "plan" | "build" | "compile" | "verify" | "critic" | "refine";
   status: StageStatus;
   detail?: string;
+  /** Structured result a client can render while the run is still going — the
+   *  plan lands ~40s in and carries the whole lecture outline. */
+  payload?: unknown;
 }
+
+/** Sink for live progress. A full authoring pass is minutes long, so the stages
+ *  are streamed as they happen rather than reported once at the end (route.ts).
+ *  `start` events exist only on this channel — the stored report keeps just the
+ *  outcomes, so a replayed report reads as a history, not a transcript. */
+export type StageSink = (e: StageEvent) => void;
 
 export interface PipelineReport {
   source: "model" | "mock";
@@ -103,56 +112,67 @@ function compileError(code: string): string | null {
 
 // ── the pipeline ─────────────────────────────────────────────────────────────
 
-/** Full authoring pass for a fresh concept. */
-export async function runPipeline(concept: string): Promise<PipelineResult> {
-  if (!process.env.ANTHROPIC_API_KEY) return mockResult();
+/** Full authoring pass for a fresh concept. `onStage` receives every stage event
+ *  as it happens, including `start` markers, so the wait can be shown as work. */
+export async function runPipeline(concept: string, onStage?: StageSink): Promise<PipelineResult> {
+  if (!process.env.ANTHROPIC_API_KEY) return mockResult(onStage);
 
   const client = new Anthropic();
   const stages: StageEvent[] = [];
+  // Recorded events are the report; `start` markers are live-only.
+  const emit = (e: StageEvent) => {
+    if (e.status !== "start") stages.push(e);
+    onStage?.(e);
+  };
   let repairs = 0;
 
   // 1 — PLAN the pedagogy.
   let plan: LessonPlan;
+  emit({ stage: "plan", status: "start" });
   try {
     plan = parseJSON<LessonPlan>(await callText(client, PLAN_SYSTEM, planPrompt(concept)));
-    stages.push({ stage: "plan", status: "ok", detail: plan.essence });
+    emit({ stage: "plan", status: "ok", detail: plan.essence, payload: plan });
   } catch (e: any) {
-    stages.push({ stage: "plan", status: "error", detail: String(e?.message || e) });
+    emit({ stage: "plan", status: "error", detail: String(e?.message || e) });
     throw e;
   }
 
   // 2 — BUILD the lesson from the plan.
+  emit({ stage: "build", status: "start" });
   let code = stripFences(await callText(client, BUILD_SYSTEM, buildPrompt(plan)));
-  stages.push({ stage: "build", status: "ok" });
+  emit({ stage: "build", status: "ok" });
 
   // 3 — COMPILE gate, repairing until it transpiles (bounded).
-  code = await ensureCompiles(client, code, stages, () => (repairs += 1));
+  code = await ensureCompiles(client, code, emit, () => (repairs += 1));
 
   // 4 — VERIFY: the hard correctness gate. Re-check answers against the plan's
   //     canonical answers and flag dead interactions. (The SDK allow-list was
   //     retired with the freeform pivot — isolation, not static analysis, is
   //     what stops imports and network access now.)
   let vreport: VerifyReport;
-  ({ code, report: vreport } = await ensureVerifies(client, plan, code, stages, () => (repairs += 1)));
+  emit({ stage: "verify", status: "start" });
+  ({ code, report: vreport } = await ensureVerifies(client, plan, code, emit, () => (repairs += 1)));
 
   // 5 — CRITIC: the pedagogy gate (improves, does not hard-block).
   let critic: CriticReport | null = null;
+  emit({ stage: "critic", status: "start" });
   try {
     critic = parseJSON<CriticReport>(await callText(client, CRITIC_SYSTEM, criticPrompt(plan, code)));
-    stages.push({ stage: "critic", status: "ok", detail: critic.summary });
+    emit({ stage: "critic", status: "ok", detail: critic.summary, payload: critic });
   } catch (e: any) {
     // A critic failure is non-fatal — the lesson still teaches; just note it.
-    stages.push({ stage: "critic", status: "skip", detail: String(e?.message || e) });
+    emit({ stage: "critic", status: "skip", detail: String(e?.message || e) });
   }
 
   // 6 — REFINE on the critic's verdict, then RE-VERIFY: a pedagogy edit can
   //     change a graded answer, so correctness must be re-earned after it.
   if (critic && needsRevision(critic)) {
     for (let i = 0; i < MAX_REFINES; i++) {
+      emit({ stage: "refine", status: "start" });
       code = stripFences(await callText(client, BUILD_SYSTEM, refinePrompt(code, critic)));
-      stages.push({ stage: "refine", status: "revise" });
-      code = await ensureCompiles(client, code, stages, () => (repairs += 1));
-      ({ code, report: vreport } = await ensureVerifies(client, plan, code, stages, () => (repairs += 1)));
+      emit({ stage: "refine", status: "revise" });
+      code = await ensureCompiles(client, code, emit, () => (repairs += 1));
+      ({ code, report: vreport } = await ensureVerifies(client, plan, code, emit, () => (repairs += 1)));
     }
   }
 
@@ -172,21 +192,21 @@ export async function repairLesson(code: string, error: string): Promise<string>
 async function ensureCompiles(
   client: Anthropic,
   code: string,
-  stages: StageEvent[],
+  emit: StageSink,
   onRepair: () => void,
 ): Promise<string> {
   let err = compileError(code);
   if (!err) {
-    stages.push({ stage: "compile", status: "ok" });
+    emit({ stage: "compile", status: "ok" });
     return code;
   }
   for (let i = 0; i < MAX_COMPILE_REPAIRS && err; i++) {
     onRepair();
-    stages.push({ stage: "compile", status: "repair", detail: err });
+    emit({ stage: "compile", status: "repair", detail: err });
     code = stripFences(await callText(client, BUILD_SYSTEM, repairPrompt(code, `[compile] ${err}`)));
     err = compileError(code);
   }
-  stages.push({ stage: "compile", status: err ? "error" : "ok", detail: err ?? undefined });
+  emit({ stage: "compile", status: err ? "error" : "ok", detail: err ?? undefined });
   return code;
 }
 
@@ -197,22 +217,22 @@ async function ensureVerifies(
   client: Anthropic,
   plan: LessonPlan,
   code: string,
-  stages: StageEvent[],
+  emit: StageSink,
   onRepair: () => void,
 ): Promise<{ code: string; report: VerifyReport }> {
   let report = verify(plan, code);
   if (report.ok) {
-    stages.push({ stage: "verify", status: "ok", detail: verifySummary(report) });
+    emit({ stage: "verify", status: "ok", detail: verifySummary(report), payload: report });
     return { code, report };
   }
   for (let i = 0; i < MAX_VERIFY_REPAIRS && !report.ok; i++) {
     onRepair();
-    stages.push({ stage: "verify", status: "repair", detail: verifySummary(report) });
+    emit({ stage: "verify", status: "repair", detail: verifySummary(report), payload: report });
     code = stripFences(await callText(client, BUILD_SYSTEM, verifyRepairPrompt(code, report, plan)));
-    code = await ensureCompiles(client, code, stages, onRepair);
+    code = await ensureCompiles(client, code, emit, onRepair);
     report = verify(plan, code);
   }
-  stages.push({ stage: "verify", status: report.ok ? "ok" : "error", detail: verifySummary(report) });
+  emit({ stage: "verify", status: report.ok ? "ok" : "error", detail: verifySummary(report), payload: report });
   return { code, report };
 }
 
@@ -227,25 +247,20 @@ function needsRevision(critic: CriticReport): boolean {
   return critic.verdict === "revise" || critic.findings.some((f) => f.severity === "must-fix");
 }
 
-function mockResult(): PipelineResult {
+function mockResult(onStage?: StageSink): PipelineResult {
   // Genuinely run the verifier on the mock so the offline path exercises the
   // same correctness gate as a live generation.
   const vreport = verify(MOCK_PLAN, MOCK_LESSON);
+  const stages: StageEvent[] = [
+    { stage: "plan", status: "ok", detail: MOCK_PLAN.essence, payload: MOCK_PLAN },
+    { stage: "build", status: "ok" },
+    { stage: "compile", status: "ok" },
+    { stage: "verify", status: vreport.ok ? "ok" : "error", detail: verifySummary(vreport), payload: vreport },
+    { stage: "critic", status: "ok", detail: MOCK_CRITIC.summary, payload: MOCK_CRITIC },
+  ];
+  stages.forEach((e) => onStage?.(e));
   return {
     code: MOCK_LESSON,
-    report: {
-      source: "mock",
-      stages: [
-        { stage: "plan", status: "ok", detail: MOCK_PLAN.essence },
-        { stage: "build", status: "ok" },
-        { stage: "compile", status: "ok" },
-        { stage: "verify", status: vreport.ok ? "ok" : "error", detail: verifySummary(vreport) },
-        { stage: "critic", status: "ok", detail: MOCK_CRITIC.summary },
-      ],
-      plan: MOCK_PLAN,
-      critic: MOCK_CRITIC,
-      verify: vreport,
-      repairs: 0,
-    },
+    report: { source: "mock", stages, plan: MOCK_PLAN, critic: MOCK_CRITIC, verify: vreport, repairs: 0 },
   };
 }

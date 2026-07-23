@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="8" fill="#0b0d12"/>
+  <!-- a curve and the point being read off it: the whole product in one mark -->
+  <path d="M5 24C11 24 13 8 27 8" stroke="#6d8cff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <circle cx="16" cy="14.5" r="3" fill="#4fd1c5"/>
+</svg>
