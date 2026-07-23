@@ -129,7 +129,9 @@ export async function runPipeline(concept: string): Promise<PipelineResult> {
   code = await ensureCompiles(client, code, stages, () => (repairs += 1));
 
   // 4 — VERIFY: the hard correctness gate. Re-check answers against the plan's
-  //     canonical answers, enforce the SDK allow-list, flag dead interactions.
+  //     canonical answers and flag dead interactions. (The SDK allow-list was
+  //     retired with the freeform pivot — isolation, not static analysis, is
+  //     what stops imports and network access now.)
   let vreport: VerifyReport;
   ({ code, report: vreport } = await ensureVerifies(client, plan, code, stages, () => (repairs += 1)));
 

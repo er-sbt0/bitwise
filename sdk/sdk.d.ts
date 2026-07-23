@@ -1,15 +1,21 @@
 /**
- * Bitwise Lesson SDK — the stable contract.
+ * Bitwise Lesson SDK — the standard library.
  *
  * Everything declared here is injected as an in-scope global inside the lesson
  * sandbox. A lesson is a default-exported React component that composes these
- * primitives. No imports, no network, no DOM escape.
+ * primitives — and, under the freeform pivot, is free to write its own helper
+ * functions, math and SVG around them. This is a LIBRARY, NOT A CAGE.
+ *
+ * What still holds absolutely: no imports (nothing resolves inside the
+ * sandbox), no network, no DOM escape. Those are enforced by ISOLATION — the
+ * cross-origin iframe, the CSP, the `require` stub — not by a static gate over
+ * the source.
  *
  * This file is the SINGLE SOURCE OF TRUTH for the SDK surface. One parser,
- * `sdk/surface.ts`, reads the annotations below; from it the verifier derives
- * its allow-list, the authoring prompt derives what it may advertise, and the
- * eval harness cross-checks the runtime. Nothing else may hand-maintain a list
- * of SDK names — change the surface by editing THIS file.
+ * `sdk/surface.ts`, reads the annotations below; from it the authoring prompt
+ * derives what it may advertise and the eval harness cross-checks the runtime.
+ * Nothing else may hand-maintain a list of SDK names — change the surface by
+ * editing THIS file.
  *
  * Every declaration (and every `Plot.*` member) carries two tags:
  *
@@ -17,16 +23,20 @@
  *   CORE — the vocabulary a lesson almost always reaches for.
  *   EXT  — richer/rarer primitives, grown as lessons ask for them.
  *
- * ── @status live | planned ─── truth. Whether the runtime renders it TODAY.
- *   LIVE     — implemented in `sandbox/sdk.tsx` (`buildScope`) right now. Only
- *              live names are permitted by the verifier and advertised to the
- *              author. The harness fails if this disagrees with the runtime.
- *   PLANNED  — declared here as intent, NOT yet implemented. Invisible to the
- *              verifier and the prompt until its `@status` flips to `live`.
+ * ── @status live | planned ─── truth. Whether the runtime implements it TODAY.
+ *   LIVE     — implemented in the sandbox runtime right now, hence documented to
+ *              the author and expected in the runtime scope.
+ *   PLANNED  — declared here as intent, NOT yet implemented. Not advertised to
+ *              the author until its `@status` flips to `live`.
+ *
+ *   @status no longer feeds a verifier allow-list (that gate is retired — see
+ *   app/api/generate/verify.ts). It now feeds DOCUMENTATION and the eval drift
+ *   gate: the harness fails when the contract and the runtime scope disagree,
+ *   so "live" can never become a lie.
  *
  * tier and status are independent: a primitive can be `ext` yet `live`
- * (e.g. `Steps`), or `core`-worthy yet still `planned`. The verifier and prompt
- * key off @status; @tier is informational curation.
+ * (e.g. `Steps`), or `core`-worthy yet still `planned`. The prompt keys off
+ * @status; @tier is informational curation.
  */
 
 import type { ReactNode } from "react"
@@ -133,7 +143,206 @@ export declare const useRef: typeof import("react").useRef
 export declare const useCallback: typeof import("react").useCallback
 
 // ────────────────────────────────────────────────────────────────────────────
-// 3 · Structure & prose
+// 3 · The Stage — one clock, one store, three drivers
+// ────────────────────────────────────────────────────────────────────────────
+//
+// Every figure is a Stage: one engine-owned clock, one reactive domain store,
+// one pure render, and three drivers that all reduce to "state changed →
+// re-render" —
+//
+//   · interaction — a drag/slider/click writes the store,
+//   · direction   — a Manim-style timeline moves specific MARKS,
+//   · emulation   — a stepper `step(state, dt)` advances the store each tick.
+//
+// Because all three share one store and one render, a figure can be a guided
+// animation the learner can also grab while a simulation runs underneath.
+//
+// The semantic that resolves "who owns a mark's position":
+//   · STATE-BOUND marks take their geometry from the store (props read `s.*`).
+//     Interaction moves them. `drawTo` may still reveal them — it animates only
+//     the reveal fraction, so it never fights declarative geometry.
+//   · HANDLE-BOUND marks keep their position on their own `useMark` handle and
+//     are moved by `transformTo`. Presentation state never pollutes the store.
+
+/** The domain store returned by {@link useStage}: your own fields, plus `set`
+ *  and `get`. Read `s.field` during render to subscribe to it. */
+export type Stage<T> = T & {
+  /** Merge a patch into the store and re-render. The one write path shared by
+   *  interaction handlers, `call(...)` beats, and the simulation stepper. */
+  set(patch: Partial<T>): void
+  /** An explicit snapshot of the current state. Use this inside a handler,
+   *  closure or beat builder so you never animate toward a stale value. */
+  get(): T
+}
+
+/**
+ * The figure's DOMAIN state — what the lesson is *about*, and nothing else.
+ * Transient view quantities (a reveal fraction, a sliding marker) belong on a
+ * {@link useMark} handle instead, so an interaction never has to un-set them.
+ *
+ * ```tsx
+ * const s = useStage({ x0: -1.5, iters: [] as number[] })
+ * <Plot.Point x={s.x0} y={f(s.x0)} />            // render reads → subscribes
+ * <Slider value={s.x0} onChange={(x0) => s.set({ x0 })} … />
+ * ```
+ * @tier core @status live
+ */
+export declare function useStage<T extends object>(initial: T): Stage<T>
+
+/** The animatable values a mark handle carries. Drawable marks (`Segment`,
+ *  `Polygon`, `OfX`) expose `pathLength`; every mark exposes position and
+ *  `opacity`. */
+export interface MarkValues {
+  /** Reveal fraction, 0 → 1. Animated by {@link drawTo}; the mark's geometry
+   *  stays wherever its props put it. */
+  pathLength: number
+  x: number
+  y: number
+  opacity: number
+}
+
+/** A handle giving a mark identity so the director can address it. Attach it
+ *  with `mark={handle}` on any `Plot.*` mark. */
+export interface Mark {
+  /** Set values INSTANTLY (no tween) — e.g. staging a marker at the current
+   *  guess before playing a beat that slides it. */
+  set(patch: Partial<MarkValues>): void
+}
+
+/**
+ * Give a mark identity. Pass `initial` when the mark is HANDLE-BOUND — i.e. its
+ * position lives here rather than in the store, because the director moves it.
+ *
+ * ```tsx
+ * const tangent = useMark()             // draw-on only; geometry stays declarative
+ * const marker  = useMark({ x: -1.5 })  // position lives on the handle
+ * <Plot.Segment mark={tangent} x1={…} y1={…} x2={…} y2={…} />
+ * <Plot.Point   mark={marker} y={0} />
+ * ```
+ * @tier core @status live
+ */
+export declare function useMark(initial?: Partial<MarkValues>): Mark
+
+/** Easing for a {@link BeatOptions} tween. @see BeatOptions */
+export type Ease = "linear" | "easeIn" | "easeOut" | "easeInOut"
+
+export interface BeatOptions {
+  /** Seconds. Defaults to a sensible per-beat value. */
+  duration?: number
+  ease?: Ease
+  /** Seconds to wait before this beat starts. */
+  delay?: number
+}
+
+/** One unit of scripted motion, produced by the beat builders and handed to
+ *  `dir.play`. Opaque — compose beats, don't inspect them. */
+export interface Beat {
+  readonly __beat: true
+}
+
+export interface Director {
+  /** Run a beat (usually a `sequence`) on the engine clock. Resolves when the
+   *  timeline finishes, so `await` chains scripted moments. */
+  play(beat: Beat): Promise<void>
+  /** True while a timeline is running — disable the play button with it. */
+  readonly playing: boolean
+  /** Snap every mark back to its initial values and cancel anything in flight.
+   *  Call this ONCE at the top of an interaction handler; it is what makes
+   *  "drag mid-animation" clean instead of leaving a half-drawn figure. */
+  reset(): void
+}
+
+/** The direction driver — a Manim-style timeline over marks.
+ *  @tier core @status live */
+export declare function useDirector(): Director
+
+/** Reveal a drawable mark by animating its `pathLength` 0 → 1. Geometry is
+ *  untouched, so this composes with state-bound marks.
+ *  @tier core @status live */
+export declare function drawTo(mark: Mark, opts?: BeatOptions): Beat
+
+/** Move a handle-bound mark by animating its own position values.
+ *  @tier core @status live */
+export declare function transformTo(
+  mark: Mark,
+  target: Partial<Pick<MarkValues, "x" | "y" | "opacity">>,
+  opts?: BeatOptions,
+): Beat
+
+/** Animate a mark's opacity. @tier core @status live */
+export declare function fadeTo(mark: Mark, opacity: number, opts?: BeatOptions): Beat
+
+/** A zero-duration beat: run `fn` at this point in the timeline. This is how a
+ *  scripted moment COMMITS to the domain store (`call(() => s.set({ x0 })))`).
+ *  @tier core @status live */
+export declare function call(fn: () => void): Beat
+
+/** Play beats one after another. @tier core @status live */
+export declare function sequence(beats: Beat[]): Beat
+/** Play beats at the same time. @tier core @status live */
+export declare function parallel(beats: Beat[]): Beat
+/** Play beats together but offset by `each` seconds — the reveal-a-family move.
+ *  @tier core @status live */
+export declare function stagger(beats: Beat[], opts: { each: number }): Beat
+/** A pause of `seconds`, for breathing room between beats.
+ *  @tier core @status live */
+export declare function wait(seconds: number): Beat
+
+export interface Simulation {
+  start(): void
+  stop(): void
+  /** Stop and restore the store to its state when the sim last started. */
+  reset(): void
+  readonly running: boolean
+}
+
+/**
+ * The emulation driver: a stepper wired to the engine clock. `step` is PURE —
+ * it receives the current state and the elapsed seconds and returns a PATCH to
+ * merge, or `null` to halt (converged, diverged, or long enough).
+ *
+ * `{ rate }` steps a discrete map that many times per second; `{ dt }` runs a
+ * continuous integration at a fixed timestep, decoupled from the frame rate.
+ *
+ * ```tsx
+ * const sim = useSimulation(s, (st) => {
+ *   if (Math.abs(f(st.x)) < 1e-9) return null
+ *   return { x: st.x - f(st.x) / df(st.x) }
+ * }, { rate: 1.6 })
+ * ```
+ * @tier core @status live
+ */
+export declare function useSimulation<T extends object>(
+  store: Stage<T>,
+  step: (state: T, dt: number) => Partial<T> | null,
+  opts?: { rate?: number; dt?: number },
+): Simulation
+
+/** Coordinate transforms handed to a `<Custom>` draw function: figure units ⇄
+ *  screen pixels, so freeform SVG lands exactly on the plotted geometry. */
+export interface PlotCtx {
+  xToPx(x: number): number
+  yToPx(y: number): number
+  pxToX(px: number): number
+  pxToY(px: number): number
+}
+
+/**
+ * The freeform hatch. A `<Plot>` child that hands you the coordinate transforms
+ * and renders whatever SVG you return — for the figure the stock marks don't
+ * have (a shaded triangle, an arrowhead, a hand-drawn annotation).
+ *
+ * ```tsx
+ * <Custom draw={({ xToPx, yToPx }) => (
+ *   <path d={`M${xToPx(a)},${yToPx(0)} L${xToPx(b)},${yToPx(h)} Z`} fill="#7b5bd6" />
+ * )} />
+ * ```
+ * @tier core @status live
+ */
+export declare function Custom(props: { draw: (ctx: PlotCtx) => ReactNode }): JSX.Element
+
+// ────────────────────────────────────────────────────────────────────────────
+// 4 · Structure & prose
 // ────────────────────────────────────────────────────────────────────────────
 
 /** A titled unit of the lesson. Lessons are a sequence of `<Section>`s.
@@ -189,7 +398,7 @@ export declare function Reveal(props: { label?: string; children: ReactNode }): 
 export declare function Hint(props: { children: ReactNode }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
-// 4 · Interactive coordinate plane  (backed by Mafs)
+// 5 · Interactive coordinate plane  (backed by Mafs)
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface PlotProps {
@@ -208,7 +417,7 @@ export interface PlotComponent {
   /** The plotting surface itself. @tier core @status live */
   (props: PlotProps): JSX.Element
   /** Plot `y = f(x)`. @tier core @status live */
-  OfX(props: { y: Fn1; color?: Color; style?: LineStyle }): JSX.Element
+  OfX(props: { y: Fn1; color?: Color; style?: LineStyle; mark?: Mark }): JSX.Element
   /** Plot `x = f(y)`. @tier ext @status planned */
   OfY(props: { x: Fn1; color?: Color; style?: LineStyle }): JSX.Element
   /** Parametric curve over `t ∈ [t0, t1]`. @tier ext @status planned */
@@ -217,9 +426,11 @@ export interface PlotComponent {
     t: [number, number]
     color?: Color
   }): JSX.Element
-  /** A static point with optional label. @tier core @status live */
-  Point(props: { x: number; y: number; color?: Color; label?: string }): JSX.Element
-  /** A draggable point. Wire `onMove` to state to drive the rest of the lesson.
+  /** A static point with optional label. Bind a `mark` and its position moves
+   *  with {@link transformTo} instead of with the props. @tier core @status live */
+  Point(props: { x?: number; y?: number; color?: Color; label?: string; mark?: Mark }): JSX.Element
+  /** A draggable point — the interaction driver. Wire `onMove` to the store to
+   *  drive the rest of the lesson; `constrain` locks it to one axis.
    *  @tier core @status live */
   MovablePoint(props: {
     x: number
@@ -227,15 +438,27 @@ export interface PlotComponent {
     onMove: (p: { x: number; y: number }) => void
     constrain?: "horizontal" | "vertical" | ((p: { x: number; y: number }) => { x: number; y: number })
     color?: Color
+    mark?: Mark
   }): JSX.Element
-  /** @tier ext @status planned */
-  Segment(props: { from: [number, number]; to: [number, number]; color?: Color }): JSX.Element
+  /** A straight segment between two points, in figure coordinates. Endpoints
+   *  stay declarative; bind a `mark` to reveal it with {@link drawTo}.
+   *  @tier core @status live */
+  Segment(props: {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    color?: Color
+    strokeWidth?: number
+    dashed?: boolean
+    mark?: Mark
+  }): JSX.Element
   /** @tier ext @status planned */
   Vector(props: { tip: [number, number]; tail?: [number, number]; color?: Color }): JSX.Element
   /** @tier ext @status planned */
   Line(props: { point: [number, number]; slope: number; color?: Color }): JSX.Element
-  /** @tier ext @status planned */
-  Polygon(props: { points: [number, number][]; color?: Color; fillOpacity?: number }): JSX.Element
+  /** A filled polygon from a list of `[x, y]` vertices. @tier core @status live */
+  Polygon(props: { points: [number, number][]; color?: Color; fillOpacity?: number; mark?: Mark }): JSX.Element
   /** @tier ext @status planned */
   Circle(props: { center: [number, number]; radius: number; color?: Color }): JSX.Element
   /** Shade the region where `expr(x, y)` compares to 0. @tier ext @status planned */
@@ -269,7 +492,7 @@ export declare function Geometry(props: {
 }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
-// 5 · Charts  (data / statistics / probability — backed by a small chart layer)
+// 6 · Charts  (data / statistics / probability — backed by a small chart layer)
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Data/statistics chart. @tier ext @status planned */
@@ -290,7 +513,7 @@ export declare function Distribution(props: {
 }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
-// 6 · Controls
+// 7 · Controls
 // ────────────────────────────────────────────────────────────────────────────
 
 /** A value slider — the workhorse explore control. @tier core @status live */
@@ -341,7 +564,7 @@ export declare function Dropdown<T extends string>(props: {
 }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
-// 7 · Assessment
+// 8 · Assessment
 // ────────────────────────────────────────────────────────────────────────────
 
 export interface GradeResult {
@@ -398,7 +621,7 @@ export declare function MultipleChoice(props: {
 export declare function Option(props: { children: ReactNode }): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
-// 8 · Motion
+// 9 · Motion
 // ────────────────────────────────────────────────────────────────────────────
 
 /** Interpolate a value over `duration` seconds. Honors reduced-motion.

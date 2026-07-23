@@ -1,19 +1,29 @@
-// The M1 verifier — the machinery that earns correctness. It runs AFTER the
-// compile gate and BEFORE a learner ever sees a lesson, and enforces four
-// independent gates on the built code:
+// The verifier — the machinery that earns ANSWER correctness. It runs AFTER the
+// compile gate and BEFORE a learner ever sees a lesson.
 //
-//   1. allow-list   — only LIVE SDK identifiers (+ live Plot marks) + JS
-//                      built-ins + React. Declared-but-unimplemented (@status
-//                      planned) primitives are rejected, not silently allowed.
-//   2. answer-check  — every declarative <Exercise answer> is CAS-re-checked
-//                      against the plan's canonical answer (and, where a
-//                      derivation is given, independently recomputed).
-//   3. custom-grader — `custom` graders can't be re-checked → flagged higher-risk.
-//   4. dead-interaction — interactive state that is set up but never read.
+// Under the freeform-creative-runtime pivot the static allow-list is RETIRED: a
+// lesson may write arbitrary JS/JSX composing the injected std-lib, so a gate
+// that rejects unknown free identifiers would reject the whole point. What used
+// to be the allow-list's real job — "no imports, no network, no DOM escape" — is
+// enforced by ISOLATION, not by this file: the cross-origin iframe, the CSP
+// (`connect-src 'none'`), and the `require` stub in sandbox/runtime.tsx. A name
+// that isn't in scope simply crashes at mount and is caught by the compile /
+// runtime-error gate plus the repair loop.
 //
-// sdk/sdk.d.ts stays the single source of truth: sdk/surface.ts parses its
-// @status tags, and this allow-list is the LIVE set — so flipping a primitive to
-// @status live (once the runtime implements it) automatically permits it here.
+// What still gates here:
+//
+//   1. parse           — the code must be parseable at all (hard).
+//   2. answer-check    — every declarative <Exercise answer> is CAS-re-checked
+//                        against the plan's canonical answer (and, where a
+//                        derivation is given, independently recomputed). This is
+//                        the whole correctness story now (hard).
+//   3. custom-grader   — `custom` graders can't be re-checked → flagged (soft).
+//   4. dead-interaction — a store set up but never read: the interaction changes
+//                        nothing the learner can see (soft).
+//
+// The determinism boundary this rests on: visual/animation code may use the
+// clock and randomness, but an answer spec must stay a static object literal —
+// `evalObjectLiteral` below reads it without executing the lesson.
 
 import Babel from "@babel/standalone";
 import {
@@ -24,12 +34,6 @@ import {
   type AnswerSpec,
 } from "./answers";
 import type { LessonPlan, Assessment } from "./prompts/plan";
-import {
-  liveTopLevelNames,
-  livePlotMembers,
-  plannedTopLevelNames,
-  plannedPlotMembers,
-} from "../../../sdk/surface";
 
 // Resolved lazily on first use, not at module load. Next.js's build-time
 // "Collecting page data" step imports this route to read its config exports;
@@ -50,7 +54,7 @@ function babel() {
 
 // ── findings ──────────────────────────────────────────────────────────────────
 
-export type VerifyGate = "allowlist" | "answer" | "custom-grader" | "dead-interaction";
+export type VerifyGate = "parse" | "answer" | "custom-grader" | "dead-interaction";
 
 export interface VerifyFinding {
   gate: VerifyGate;
@@ -66,27 +70,6 @@ export interface VerifyReport {
   checked: number;
 }
 
-// ── allow-list, derived from the SDK contract (via sdk/surface.ts) ───────────
-
-/** JS globals a lesson may reference. Deliberately small and pure — no I/O, no
- *  clock, no randomness (lessons must be deterministic to be re-checkable). */
-const JS_BUILTINS = new Set([
-  "Math", "Number", "String", "Boolean", "Array", "Object", "JSON", "Symbol",
-  "Map", "Set", "isFinite", "isNaN", "parseFloat", "parseInt", "Infinity",
-  "NaN", "undefined", "RegExp", "Error", "console",
-]);
-
-/** React is injected into the sandbox as a global, along with its hooks. */
-const REACT_GLOBALS = new Set(["React", "Fragment"]);
-
-/** A lesson may reference an SDK name only if the runtime renders it TODAY
- *  (@status live). A `planned` primitive is declared in the contract but not yet
- *  implemented — permitting it would let a lesson pass verify and then crash at
- *  mount, which is exactly the drift this gate exists to stop. */
-function isAllowed(name: string): boolean {
-  return liveTopLevelNames().has(name) || JS_BUILTINS.has(name) || REACT_GLOBALS.has(name);
-}
-
 // ── parsing ──────────────────────────────────────────────────────────────────
 
 function parse(code: string) {
@@ -95,69 +78,6 @@ function parse(code: string) {
     sourceType: "module",
     plugins: ["jsx", "typescript"],
   });
-}
-
-/** Free identifiers referenced but not declared anywhere and not allow-listed,
- *  plus `Plot.*` marks the runtime doesn't render. Both are truthfulness gates:
- *  a name is permitted only if it maps to something the sandbox can actually
- *  mount today. */
-function checkAllowlist(ast: any): VerifyFinding[] {
-  const { traverse, t } = babel();
-  const bad = new Set<string>();
-  const badPlot = new Set<string>();
-  const planned = plannedTopLevelNames();
-  const liveMembers = livePlotMembers();
-  const plannedMembers = plannedPlotMembers();
-
-  traverse(ast, {
-    ReferencedIdentifier(path: any) {
-      const { node, parent } = path;
-      const name = node.name;
-      // JSX intrinsic tags (lowercase) are always fine.
-      if (t.isJSXIdentifier(node) && /^[a-z]/.test(name)) return;
-      // Only care about true free references (no binding in scope).
-      if (path.scope.getBinding(name)) return;
-      if (isAllowed(name)) return;
-      // Skip member/property positions that aren't the object.
-      if (t.isMemberExpression(parent) && parent.property === node && !parent.computed) return;
-      bad.add(name);
-    },
-    // `Plot.OfX(...)` — the property side is skipped above, so check it here.
-    MemberExpression(path: any) {
-      const { node } = path;
-      if (node.computed) return;
-      if (!t.isIdentifier(node.object) || node.object.name !== "Plot") return;
-      if (path.scope.getBinding("Plot")) return; // shadowed local, not the SDK global
-      if (!t.isIdentifier(node.property)) return;
-      if (!liveMembers.has(node.property.name)) badPlot.add(node.property.name);
-    },
-    // `<Plot.OfX/>` — marks are used as JSX, a distinct node type from the above.
-    JSXMemberExpression(path: any) {
-      const { node } = path;
-      if (!t.isJSXIdentifier(node.object) || node.object.name !== "Plot") return;
-      if (path.scope.getBinding("Plot")) return;
-      if (!t.isJSXIdentifier(node.property)) return;
-      if (!liveMembers.has(node.property.name)) badPlot.add(node.property.name);
-    },
-  });
-
-  const findings: VerifyFinding[] = [...bad].map((name) => ({
-    gate: "allowlist" as const,
-    severity: "hard" as const,
-    detail: planned.has(name)
-      ? `"${name}" is declared in the SDK but not implemented yet (@status planned) — it would crash at mount. Use a live primitive instead.`
-      : `"${name}" is not an SDK identifier, a JS built-in, or React — lessons may only use the SDK.`,
-  }));
-  for (const member of badPlot) {
-    findings.push({
-      gate: "allowlist",
-      severity: "hard",
-      detail: plannedMembers.has(member)
-        ? `"Plot.${member}" is declared but not implemented yet (@status planned) — it would crash at mount. Use a live Plot mark instead.`
-        : `"Plot.${member}" is not a Plot mark — check the SDK for available marks.`,
-    });
-  }
-  return findings;
 }
 
 /** An answer spec pulled off an <Exercise>. `spec` is null for custom/unparseable. */
@@ -199,24 +119,45 @@ function extractAnswers(code: string, ast: any): ExtractedAnswer[] {
   return out;
 }
 
-/** Interactive state (useLessonState) that is set up but never read. */
+/** State that is set up but never read — the same smell in both idioms:
+ *  `useLessonState` (destructured pair, check the value binding) and `useStage`
+ *  (a single store handle; if nothing ever reads it, nothing renders from it, so
+ *  the figure is inert no matter how much the drivers write to it). Soft: it is
+ *  a strong hint, not proof — the value could be read through an alias we don't
+ *  follow. */
 function checkDeadInteractions(ast: any): VerifyFinding[] {
   const { traverse, t } = babel();
   const findings: VerifyFinding[] = [];
+  const dead = (name: string, hook: string, why: string) => {
+    findings.push({
+      gate: "dead-interaction",
+      severity: "soft",
+      detail: `state "${name}" is created with ${hook} but never read — ${why}`,
+    });
+  };
   traverse(ast, {
     VariableDeclarator(path: any) {
       const init = path.node.init;
-      if (!t.isCallExpression(init) || init.callee?.name !== "useLessonState") return;
-      if (!t.isArrayPattern(path.node.id)) return;
-      const valueId = path.node.id.elements[0];
-      if (!valueId || !t.isIdentifier(valueId)) return;
-      const binding = path.scope.getBinding(valueId.name);
-      if (binding && binding.references === 0) {
-        findings.push({
-          gate: "dead-interaction",
-          severity: "soft",
-          detail: `state "${valueId.name}" is created with useLessonState but never read — the interaction changes nothing the learner can see.`,
-        });
+      if (!t.isCallExpression(init)) return;
+      const hook = init.callee?.name;
+
+      if (hook === "useLessonState") {
+        if (!t.isArrayPattern(path.node.id)) return;
+        const valueId = path.node.id.elements[0];
+        if (!valueId || !t.isIdentifier(valueId)) return;
+        const binding = path.scope.getBinding(valueId.name);
+        if (binding && binding.references === 0) {
+          dead(valueId.name, "useLessonState", "the interaction changes nothing the learner can see.");
+        }
+        return;
+      }
+
+      if (hook === "useStage") {
+        if (!t.isIdentifier(path.node.id)) return;
+        const binding = path.scope.getBinding(path.node.id.name);
+        if (binding && binding.references === 0) {
+          dead(path.node.id.name, "useStage", "no mark or prose reads the store, so the figure can't respond to any driver.");
+        }
       }
     },
   });
@@ -300,13 +241,12 @@ export function verify(plan: LessonPlan, code: string): VerifyReport {
     return {
       ok: false,
       checked: 0,
-      findings: [{ gate: "allowlist", severity: "hard", detail: `could not parse lesson: ${String(e?.message || e)}` }],
+      findings: [{ gate: "parse", severity: "hard", detail: `could not parse lesson: ${String(e?.message || e)}` }],
     };
   }
 
   const answers = extractAnswers(code, ast);
   const findings = [
-    ...checkAllowlist(ast),
     ...checkAnswers(plan, answers),
     ...checkDeadInteractions(ast),
   ];
@@ -332,7 +272,7 @@ ${notes}
 The lesson must grade against these canonical answers exactly:
 ${canon || "(none declared)"}
 
-Use ONLY SDK primitives and JS built-ins — no imports, no external identifiers.
+No \`import\` statements — nothing is resolvable inside the sandbox; the std-lib and React are already in scope. Otherwise you may write arbitrary JS/JSX composing that std-lib.
 
 CURRENT CODE:
 ${code}`;
