@@ -11,7 +11,8 @@
     "build": "next build",
     "start": "next start",
     "eval": "node scripts/eval.mjs",
-    "test:browser": "node scripts/browser-test.mjs"
+    "test:browser": "node scripts/browser-test.mjs",
+    "test:recover": "node scripts/sandbox-recovery.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

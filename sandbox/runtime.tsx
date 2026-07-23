@@ -7,6 +7,7 @@ import React from "react";
 import { createRoot, Root } from "react-dom/client";
 import * as Babel from "@babel/standalone";
 import { buildScope, setEmit } from "./sdk";
+import { resetMarks } from "./stage/mark";
 
 type InMsg = { type: "render"; id: string; code: string } | { type: "ping" };
 
@@ -68,6 +69,21 @@ function evaluate(compiled: string): { Comp: React.ComponentType; meta?: unknown
   return { Comp, meta: mod.exports.meta };
 }
 
+/** Lessons that reached a COMMITTED render, and the meta they mounted with. */
+const mounted = new Map<string, unknown>();
+
+/** Posts `mounted` from a committed effect, so the parent hears it only after
+ *  the tree actually rendered. Posting straight after `root.render()` was a lie:
+ *  React commits asynchronously, so a lesson that threw reported "mounted" and
+ *  then "error", and the host showed a green Ready over an empty frame. */
+function MountSignal({ id, meta }: { id: string; meta: unknown }) {
+  React.useEffect(() => {
+    mounted.set(id, meta);
+    post({ type: "mounted", id, meta });
+  }, [id]);
+  return null;
+}
+
 function render(id: string, code: string) {
   let compiled: string;
   try {
@@ -84,23 +100,64 @@ function render(id: string, code: string) {
     return;
   }
   try {
+    resetMarks();
     getRoot().render(
       <React.StrictMode>
-        <Boundary id={id}>
+        {/* `key` is load-bearing: the root is reused across lessons, so without
+            it React keeps the SAME Boundary instance, and a boundary that has
+            caught once renders null forever. The repaired lesson would then
+            mount into a permanently-failed boundary — no output, no `mounted`,
+            no `error` — and the self-repair loop would hang on silence. */}
+        <Boundary key={id} id={id}>
           <Comp />
+          <MountSignal id={id} meta={meta} />
         </Boundary>
       </React.StrictMode>,
     );
-    post({ type: "mounted", id, meta });
   } catch (e: any) {
     post({ type: "error", phase: "runtime", id, message: String(e?.stack || e?.message || e) });
   }
 }
 
+// The host sizes its frame to the lesson instead of scrolling it inside a fixed
+// box — a lesson is a document, and a document that scrolls inside a 560px
+// window reads like a preview pane. Cross-origin, so the height has to be told.
+function watchHeight() {
+  const el = document.getElementById("root")!;
+  let last = 0;
+  const report = () => {
+    const h = Math.ceil(el.getBoundingClientRect().height + 48); // + body padding
+    if (Math.abs(h - last) < 2) return;
+    last = h;
+    post({ type: "size", height: h });
+  };
+  new ResizeObserver(report).observe(el);
+  // KaTeX fonts and Mafs' ResizeObserver both settle after first paint.
+  [0, 120, 400, 1200].forEach((d) => setTimeout(report, d));
+}
+
+// The host re-posts a job until we acknowledge it, so the same id can arrive
+// more than once. Rendering it twice would tear down a live lesson and throw
+// away whatever the learner had already done in it.
+// A repeat of a lesson that MOUNTED is re-acknowledged rather than re-rendered:
+// the host stops retrying only once it hears back, and rendering again would
+// tear down a live lesson and discard whatever the learner had already done in
+// it. A repeat of one still in flight (or one that failed) is dropped — its own
+// `mounted` / `error` is the acknowledgement, and answering `mounted` for a
+// lesson that never mounted is precisely the lie this file exists to avoid.
+let currentId: string | null = null;
+
 window.addEventListener("message", (ev: MessageEvent<InMsg>) => {
   const data = ev.data;
   if (!data) return;
-  if (data.type === "render") render(data.id, data.code);
+  if (data.type === "render") {
+    if (data.id === currentId) {
+      if (mounted.has(data.id)) post({ type: "mounted", id: data.id, meta: mounted.get(data.id) });
+      return;
+    }
+    currentId = data.id;
+    render(data.id, data.code);
+  }
   // The `ready` below is posted once, on boot — which can land BEFORE the parent
   // page has hydrated and attached its listener, leaving the parent waiting
   // forever. `ping` lets a late parent ask again instead of polling.
@@ -120,4 +177,5 @@ window.addEventListener("unhandledrejection", (ev) => {
   post({ type: "error", phase: "runtime", id: "*", message: String(r?.stack || r?.message || r) });
 });
 
+watchHeight();
 post({ type: "ready" });
