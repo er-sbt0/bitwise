@@ -217,6 +217,52 @@ function Hint({ children }: { children: React.ReactNode }) {
   return <Reveal label="Hint">{children}</Reveal>;
 }
 
+// Ordered walkthrough for guided derivations: steps reveal one at a time so the
+// learner follows the argument line by line instead of seeing the whole wall of
+// algebra at once. <Steps> owns the numbered rail + progressive reveal; each
+// <Step> just carries a title + body (read from its props, like <Option>).
+function Step({ title, children }: { title?: string; children: React.ReactNode }) {
+  return (
+    <div style={{ margin: "8px 0" }}>
+      {title && <div style={{ fontWeight: 600, marginBottom: 4 }}>{title}</div>}
+      {children}
+    </div>
+  );
+}
+
+function Steps({ children }: { children: React.ReactNode }) {
+  const steps = React.Children.toArray(children) as React.ReactElement<{ title?: string; children?: React.ReactNode }>[];
+  const total = steps.length;
+  const [shown, setShown] = React.useState(1);
+  return (
+    <div style={{ margin: "16px 0" }}>
+      {steps.slice(0, shown).map((step, i) => {
+        const last = i === total - 1;
+        const title = step.props?.title;
+        return (
+          <div key={i} style={{ display: "flex", gap: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ flex: "0 0 auto", width: 26, height: 26, borderRadius: "50%", background: "#2f6df0", color: "#fff", fontSize: ".8rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                {i + 1}
+              </div>
+              {!last && <div style={{ width: 2, flex: 1, background: "#e3e6ec", margin: "4px 0" }} />}
+            </div>
+            <div style={{ flex: 1, paddingBottom: last ? 0 : 12 }}>
+              {title && <div style={{ fontWeight: 600, margin: "3px 0 4px" }}>{title}</div>}
+              {step.props?.children}
+            </div>
+          </div>
+        );
+      })}
+      {shown < total && (
+        <button onClick={() => setShown((s) => Math.min(total, s + 1))} style={{ ...btnStyle, marginLeft: 38 }}>
+          Next step · {shown}/{total}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ---- controls ---------------------------------------------------------------
 function Slider({ value, onChange, min, max, step = 0.1, label, showValue = true }: any) {
   return (
@@ -529,6 +575,8 @@ export function buildScope() {
     Prose,
     Math,
     Callout,
+    Steps,
+    Step,
     Reveal,
     Hint,
     Plot,
