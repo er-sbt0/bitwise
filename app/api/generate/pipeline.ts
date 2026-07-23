@@ -16,13 +16,15 @@ import {
   MOCK_CRITIC,
   type CriticReport,
 } from "./prompts/critic";
+import { verify, verifyRepairPrompt, type VerifyReport } from "./verify";
 
 const MAX_COMPILE_REPAIRS = 2;
+const MAX_VERIFY_REPAIRS = 2;
 const MAX_REFINES = 1;
 
 export type StageStatus = "ok" | "repair" | "revise" | "skip" | "error";
 export interface StageEvent {
-  stage: "plan" | "build" | "compile" | "critic" | "refine";
+  stage: "plan" | "build" | "compile" | "verify" | "critic" | "refine";
   status: StageStatus;
   detail?: string;
 }
@@ -33,6 +35,7 @@ export interface PipelineReport {
   stages: StageEvent[];
   plan: LessonPlan | null;
   critic: CriticReport | null;
+  verify: VerifyReport | null;
   repairs: number;
 }
 
@@ -125,7 +128,12 @@ export async function runPipeline(concept: string): Promise<PipelineResult> {
   // 3 — COMPILE gate, repairing until it transpiles (bounded).
   code = await ensureCompiles(client, code, stages, () => (repairs += 1));
 
-  // 4 — CRITIC: the primary quality gate.
+  // 4 — VERIFY: the hard correctness gate. Re-check answers against the plan's
+  //     canonical answers, enforce the SDK allow-list, flag dead interactions.
+  let vreport: VerifyReport;
+  ({ code, report: vreport } = await ensureVerifies(client, plan, code, stages, () => (repairs += 1)));
+
+  // 5 — CRITIC: the pedagogy gate (improves, does not hard-block).
   let critic: CriticReport | null = null;
   try {
     critic = parseJSON<CriticReport>(await callText(client, CRITIC_SYSTEM, criticPrompt(plan, code)));
@@ -135,16 +143,18 @@ export async function runPipeline(concept: string): Promise<PipelineResult> {
     stages.push({ stage: "critic", status: "skip", detail: String(e?.message || e) });
   }
 
-  // 5 — REFINE on the critic's verdict (improve, don't block).
+  // 6 — REFINE on the critic's verdict, then RE-VERIFY: a pedagogy edit can
+  //     change a graded answer, so correctness must be re-earned after it.
   if (critic && needsRevision(critic)) {
     for (let i = 0; i < MAX_REFINES; i++) {
       code = stripFences(await callText(client, BUILD_SYSTEM, refinePrompt(code, critic)));
       stages.push({ stage: "refine", status: "revise" });
       code = await ensureCompiles(client, code, stages, () => (repairs += 1));
+      ({ code, report: vreport } = await ensureVerifies(client, plan, code, stages, () => (repairs += 1)));
     }
   }
 
-  return { code, report: { source: "model", model, stages, plan, critic, repairs } };
+  return { code, report: { source: "model", model, stages, plan, critic, verify: vreport, repairs } };
 }
 
 /** Single build-only repair pass for a RUNTIME error the sandbox caught after
@@ -178,11 +188,47 @@ async function ensureCompiles(
   return code;
 }
 
+/** Run the verifier, repairing HARD findings until they clear (bounded). Each
+ *  repair is re-compiled before it's re-verified. Returns the last report even
+ *  if findings remain, so the pipeline can surface them. */
+async function ensureVerifies(
+  client: Anthropic,
+  plan: LessonPlan,
+  code: string,
+  stages: StageEvent[],
+  onRepair: () => void,
+): Promise<{ code: string; report: VerifyReport }> {
+  let report = verify(plan, code);
+  if (report.ok) {
+    stages.push({ stage: "verify", status: "ok", detail: verifySummary(report) });
+    return { code, report };
+  }
+  for (let i = 0; i < MAX_VERIFY_REPAIRS && !report.ok; i++) {
+    onRepair();
+    stages.push({ stage: "verify", status: "repair", detail: verifySummary(report) });
+    code = stripFences(await callText(client, BUILD_SYSTEM, verifyRepairPrompt(code, report, plan)));
+    code = await ensureCompiles(client, code, stages, onRepair);
+    report = verify(plan, code);
+  }
+  stages.push({ stage: "verify", status: report.ok ? "ok" : "error", detail: verifySummary(report) });
+  return { code, report };
+}
+
+function verifySummary(report: VerifyReport): string {
+  const hard = report.findings.filter((f) => f.severity === "hard").length;
+  const soft = report.findings.length - hard;
+  if (report.ok && !soft) return `${report.checked} answer(s) verified`;
+  return `${report.checked} checked · ${hard} hard · ${soft} soft`;
+}
+
 function needsRevision(critic: CriticReport): boolean {
   return critic.verdict === "revise" || critic.findings.some((f) => f.severity === "must-fix");
 }
 
 function mockResult(): PipelineResult {
+  // Genuinely run the verifier on the mock so the offline path exercises the
+  // same correctness gate as a live generation.
+  const vreport = verify(MOCK_PLAN, MOCK_LESSON);
   return {
     code: MOCK_LESSON,
     report: {
@@ -191,10 +237,12 @@ function mockResult(): PipelineResult {
         { stage: "plan", status: "ok", detail: MOCK_PLAN.essence },
         { stage: "build", status: "ok" },
         { stage: "compile", status: "ok" },
+        { stage: "verify", status: vreport.ok ? "ok" : "error", detail: verifySummary(vreport) },
         { stage: "critic", status: "ok", detail: MOCK_CRITIC.summary },
       ],
       plan: MOCK_PLAN,
       critic: MOCK_CRITIC,
+      verify: vreport,
       repairs: 0,
     },
   };

@@ -2,6 +2,26 @@
 // acts as a lecturer deciding *how to teach* the concept — the essence, the
 // through-line, the intuition to leave behind. This is where pedagogy is
 // decided; build.ts merely renders it. The plan is the LLM being the brain.
+//
+// The plan also commits to the CANONICAL ANSWER of anything it will grade,
+// BEFORE any code exists. That commitment is what the verifier re-checks the
+// built lesson against — the plan, not the model that wrote the grader, is the
+// source of truth for correctness.
+
+import type { CanonicalAnswer, Derivation } from "../answers";
+
+/** A graded question the lesson will pose, with the answer the plan commits to.
+ *  The verifier confirms the built <Exercise> grades against exactly this. */
+export interface Assessment {
+  /** What the learner is asked, in one line. */
+  ask: string;
+  /** The canonical, correct answer — the source of truth for grading. */
+  answer: CanonicalAnswer;
+  /** Optional independent recipe the verifier uses to RE-DERIVE the answer with
+   *  a CAS, catching a canonical that is itself wrong. Include it whenever the
+   *  answer is mechanically derivable (a derivative, a simplification, a value). */
+  derivation?: Derivation;
+}
 
 export interface LessonPlan {
   /** Stable-ish slug for the concept, e.g. "why-derivative-is-slope". */
@@ -24,6 +44,10 @@ export interface LessonPlan {
   interaction: string;
   prerequisites?: string[];
   difficulty?: 1 | 2 | 3 | 4 | 5;
+  /** The graded questions and their canonical answers. Often just one, or none
+   *  when the lesson is purely exploratory. Every graded <Exercise> the build
+   *  produces must correspond to an assessment here. */
+  assessments?: Assessment[];
 }
 
 export const PLAN_SYSTEM = `You are a gifted university lecturer designing ONE short interactive math lesson for the Bitwise engine.
@@ -42,8 +66,31 @@ Output ONLY a JSON object (no prose, no markdown fences) with this shape:
   "misconception": "A common wrong idea this lesson should dissolve.",
   "interaction": "ONE explore-to-see-why interaction (a slider/plot/movable point) that makes the aha visible.",
   "prerequisites": ["concept-slug", "..."],
-  "difficulty": 1
+  "difficulty": 1,
+  "assessments": [
+    {
+      "ask": "what the learner is asked, in one line",
+      "answer": { "type": "numeric", "value": 3, "tolerance": 0.01 },
+      "derivation": { "given": "x^2 + 3x", "op": "derivative", "var": "x" }
+    }
+  ]
 }
+
+ASSESSMENTS — the correctness contract
+- If the lesson grades ANY answer, you must commit to that answer HERE, now, before the code exists. The lesson will be re-checked against it by machine.
+- "answer" is a typed spec. Allowed types:
+  - {"type":"numeric","value":N,"tolerance":T?,"unit":"..."?}
+  - {"type":"expression","value":"2*x + 3","vars":["x"]?}    // an algebraic expression
+  - {"type":"point","x":N,"y":N,"tolerance":T?}
+  - {"type":"interval","from":N,"to":N,"openLeft":bool?,"openRight":bool?}
+  - {"type":"set","values":[...],"ordered":bool?}
+  - {"type":"text","value":"hypotenuse" | ["a","b"],"caseSensitive":bool?}
+- Give "derivation" WHENEVER the answer is mechanically derivable, so a CAS can recompute it independently:
+  - {"given":"expr","op":"derivative","var":"x"}   → answer must be the derivative expression
+  - {"given":"expr","op":"simplify"}               → answer must be the simplified expression
+  - {"given":"expr","op":"evaluate","var":"x","at":N} → answer must be the numeric value
+- Get these answers RIGHT — a wrong canonical here fails the verifier and blocks the lesson.
+- A purely exploratory lesson with no graded question may omit "assessments" (or use []).
 
 PRINCIPLES
 - Essence over coverage. One idea, taught deeply, beats five ideas listed.
@@ -80,4 +127,11 @@ export const MOCK_PLAN: LessonPlan = {
     "Drag sliders for $a$, $h$, $k$ and watch the vertex marker track $(h,k)$ exactly while $a$ only reshapes the curve.",
   prerequisites: ["parabolas", "function-transformations"],
   difficulty: 2,
+  assessments: [
+    {
+      ask: "Minimum value of f(x) = 2(x-3)^2 + 5",
+      answer: { type: "numeric", value: 5, tolerance: 0.001 },
+      derivation: { given: "2*(x-3)^2 + 5", op: "evaluate", var: "x", at: 3 },
+    },
+  ],
 };

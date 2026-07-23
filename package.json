@@ -9,7 +9,8 @@
     "dev": "next dev",
     "prebuild": "node scripts/build-sandbox.mjs",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "eval": "node scripts/eval.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.68.0",

@@ -4,6 +4,7 @@
 // reasoning, and exercises are optional rather than the point.
 
 import type { LessonPlan } from "./plan";
+import { describeAnswer } from "../answers";
 
 export const BUILD_SYSTEM = `You author ONE interactive math lesson as a single React component for the Bitwise engine.
 
@@ -44,7 +45,8 @@ Assessment (OPTIONAL — at most one light reflective check, never the focus):
     <Hint>...</Hint>
   </Exercise>
   <MultipleChoice prompt={...} correct={indexOrArray} shuffle? solution?><Option>...</Option>...</MultipleChoice>
-  ANSWER shapes: {type:"numeric",value,tolerance?} | {type:"expression",value,vars?} | {type:"point",x,y,tolerance?} | {type:"text",value}
+  ANSWER shapes: {type:"numeric",value,tolerance?} | {type:"expression",value,vars?} | {type:"point",x,y,tolerance?} | {type:"interval",from,to,openLeft?,openRight?} | {type:"set",values,ordered?} | {type:"text",value}
+  If the plan lists assessments, every graded <Exercise> MUST use the matching canonical answer VERBATIM — a machine re-checks it and blocks the lesson on any disagreement. Write the answer as a plain object literal (numbers/strings only, Math.* is allowed); do NOT compute it with a custom grader function.
 
 LECTURE-FIRST RULES
 - Open by MOTIVATING — a tension or question, not a definition. Earn the idea.
@@ -96,6 +98,15 @@ export default function Lesson() {
   )
 }`;
 
+/** Spells out the canonical answers the built lesson must grade against, so the
+ *  grader agrees with the verifier's source of truth. */
+function canonicalNote(plan: LessonPlan): string {
+  const a = plan.assessments ?? [];
+  if (!a.length) return "\nThis lesson has no graded answer — keep it exploratory; do not invent a quiz.\n";
+  const lines = a.map((x) => `- ${x.ask} → answer: ${describeAnswer(x.answer)}  (spec: ${JSON.stringify(x.answer)})`).join("\n");
+  return `\nCANONICAL ANSWERS — any graded <Exercise> must use these EXACTLY (verbatim spec), or the verifier blocks the lesson:\n${lines}\n`;
+}
+
 export function buildPrompt(plan: LessonPlan): string {
   return `Here is the pedagogical plan to render, and a well-formed lecture-first example to match in spirit (not content):
 
@@ -104,7 +115,7 @@ ${FEWSHOT}
 
 PLAN (teach exactly this — its essence, argument, and interaction):
 ${JSON.stringify(plan, null, 2)}
-
+${canonicalNote(plan)}
 Author the lesson component now. Follow the plan's through-line: motivate with its "motivate", develop its "develop" beats (use <Steps>), build the "interaction" so the learner sees why, and reveal its "essence". Return only the component source.`;
 }
 
@@ -155,6 +166,10 @@ export default function Lesson() {
         <Callout kind="key-idea" title="The essence">
           <Prose>{\`In $f(x) = a(x-h)^2 + k$ the vertex isn't something you *calculate* — it's something you *read*. The form already points at it.\`}</Prose>
         </Callout>
+        <Exercise prompt={<Prose>{\`Read it off: for $f(x) = 2(x-3)^2 + 5$, what is the minimum value of $f$?\`}</Prose>} answer={{ type: "numeric", value: 5, tolerance: 0.001 }} input="number">
+          <Hint>The squared part is never negative, and it's zero at the vertex.</Hint>
+          <Hint>At the vertex the square contributes $0$, so $f$ equals the $+k$ term.</Hint>
+        </Exercise>
       </Section>
     </>
   )

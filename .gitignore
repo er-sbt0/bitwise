@@ -9,6 +9,9 @@ public/sandbox-runtime.js.map
 public/katex.min.css
 public/fonts/
 
+# Eval harness bundle (scripts/eval.mjs)
+.bitwise-eval.mjs
+
 # Env
 .env
 .env.local
