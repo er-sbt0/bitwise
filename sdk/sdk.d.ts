@@ -202,11 +202,17 @@ export interface MarkValues {
 }
 
 /** A handle giving a mark identity so the director can address it. Attach it
- *  with `mark={handle}` on any `Plot.*` mark. */
-export interface Mark {
+ *  with `mark={handle}` on any `Plot.*` mark — or read its channels live inside
+ *  a {@link Custom} draw function to animate SVG you drew yourself. */
+export interface Mark extends MarkValues {
   /** Set values INSTANTLY (no tween) — e.g. staging a marker at the current
    *  guess before playing a beat that slides it. */
   set(patch: Partial<MarkValues>): void
+  /** The current value of any channel, including ones you invented. Equivalent
+   *  to reading `mark.<name>`. */
+  get(name: string): number
+  /** Any channel you name in a `transformTo` patch, readable the same way. */
+  readonly [channel: string]: any
 }
 
 /**
@@ -337,9 +343,26 @@ export interface PlotCtx {
  *   <path d={`M${xToPx(a)},${yToPx(0)} L${xToPx(b)},${yToPx(h)} Z`} fill="#7b5bd6" />
  * )} />
  * ```
+ *
+ * **It animates.** The draw function re-runs on every frame of a director beat,
+ * so read {@link Mark} channels straight off the handle and the drawing follows
+ * the tween — no `mark={…}` prop, nothing to wire:
+ *
+ * ```tsx
+ * const tile = useMark({ x: 0, opacity: 0 })
+ * dir.play(sequence([fadeTo(tile, 1), transformTo(tile, { x: 3 })]))
+ *
+ * <Custom draw={({ xToPx, yToPx }) => (
+ *   <rect opacity={tile.opacity} x={xToPx(tile.x)} y={yToPx(h)} … />
+ * )} />
+ * ```
+ * Pass `static` for a figure that genuinely never moves, to skip the subscription.
  * @tier core @status live
  */
-export declare function Custom(props: { draw: (ctx: PlotCtx) => ReactNode }): JSX.Element
+export declare function Custom(props: {
+  draw: (ctx: PlotCtx) => ReactNode
+  static?: boolean
+}): JSX.Element
 
 // ────────────────────────────────────────────────────────────────────────────
 // 4 · Structure & prose

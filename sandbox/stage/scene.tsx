@@ -21,7 +21,7 @@ import {
   vec,
 } from "mafs";
 import type { MotionValue } from "motion/react";
-import type { Mark } from "./mark";
+import { liveMarks, type Mark } from "./mark";
 
 // ---- palette ----------------------------------------------------------------
 // Lives here rather than in sdk.tsx because the sdk imports the stage and never
@@ -143,11 +143,60 @@ function PlotRoot({
 }
 
 /**
+ * Re-render this subtree while ANY live mark is animating.
+ *
+ * Everything else in this file writes derived geometry straight to the DOM and
+ * never re-renders per frame — but a `<Custom>` draw function computes its whole
+ * SVG in JS, so there is nothing to write *to*: the only way its geometry can
+ * follow a tween is to run the function again. Subscription is automatic rather
+ * than declared, because the failure mode of a forgotten `marks={…}` prop is
+ * silent (the beat plays, the figure sits still) — and it costs nothing at rest,
+ * since a MotionValue only fires while a beat is actually running.
+ *
+ * Coalesced onto one frame: a beat that moves x, y and opacity together is one
+ * render, not three.
+ */
+function useAnimationTick(enabled: boolean) {
+  const [, bump] = React.useReducer((n: number) => n + 1, 0);
+  // No dependency array on purpose (same reasoning as useMarkBinding): the set
+  // of live marks changes as the lesson mounts, and re-subscribing is cheap
+  // because renders only happen on state change — never per frame.
+  React.useLayoutEffect(() => {
+    if (!enabled) return;
+    let raf = 0;
+    const schedule = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        bump();
+      });
+    };
+    const offs = liveMarks().flatMap((m) => Object.values(m.values).map((v) => v.on("change", schedule)));
+    return () => {
+      offs.forEach((o) => o());
+      if (raf) cancelAnimationFrame(raf);
+    };
+  });
+}
+
+/**
  * The freeform hatch (generalises the old `PlotCtx`). A `<Plot>` child that gets
  * the transforms and renders whatever SVG the author returns, in pixel space.
+ *
+ * The draw function may read mark channels live — `corner.opacity`, `tile.x` —
+ * and re-runs on every animation frame of a director beat, so hand-drawn SVG
+ * animates exactly like a stock mark. Pass `static` to opt out for a figure that
+ * genuinely never moves.
  */
-export function Custom({ draw }: { draw: (ctx: PlotCtx) => React.ReactNode }) {
+export function Custom({
+  draw,
+  static: isStatic,
+}: {
+  draw: (ctx: PlotCtx) => React.ReactNode;
+  static?: boolean;
+}) {
   const t = useToPx();
+  useAnimationTick(!isStatic);
   return <>{draw(t)}</>;
 }
 

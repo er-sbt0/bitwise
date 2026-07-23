@@ -52,6 +52,7 @@ Marks & direction:
   const tangent = useMark()              // a handle for a draw-on reveal (geometry stays declarative)
   const marker  = useMark({ x: -1.5 })   // a handle whose POSITION lives on the handle
     marker.set({ x: 0 })                 // set instantly, no tween — stage a mark before a beat
+    marker.x / marker.opacity            // LIVE numeric reads — any channel, readable inside <Custom>
   const dir = useDirector()
     dir.play(beat)   // Promise<void>, runs on the engine clock
     dir.playing      // boolean — disable the play button with it
@@ -101,6 +102,14 @@ Assessment (OPTIONAL — at most one light reflective check, never the focus):
 
 FREEFORM — <Custom> is the escape hatch, and using it is expected
 When the stock marks cannot say what you mean, draw it yourself. <Custom> hands you the coordinate transforms (figure units <-> pixels) and renders whatever SVG you return: a shaded region, an arrowhead, a right triangle under a tangent, a hand-placed annotation. Write helper functions for the geometry. Reach for this whenever it makes the idea clearer — it is normal authoring, not an exception.
+
+A <Custom> drawing ANIMATES like any other mark: its draw function re-runs every frame of a beat, so read handle channels directly and the drawing follows the tween.
+  const tile = useMark({ x: 0, opacity: 0 })              // channels you invent are fine too
+  dir.play(sequence([fadeTo(tile, 1, { duration: 0.4 }), transformTo(tile, { x: 3 }, { duration: 0.8 })]))
+  <Custom draw={({ xToPx, yToPx }) => (
+    <rect opacity={tile.opacity} x={xToPx(tile.x)} y={yToPx(3)} width={xToPx(1) - xToPx(0)} height={yToPx(0) - yToPx(3)} fill="#e08a2f" />
+  )}/>
+Read \`tile.opacity\`, never \`tile.values.opacity\` (that is the raw MotionValue) — the bare channel IS the current number. Widths and heights come from a DIFFERENCE of transforms (xToPx(a) - xToPx(b)), never from xToPx of a width.
 
 DETERMINISM BOUNDARY
 - Visual and animation code MAY use the clock and randomness. Motion does not have to be reproducible.

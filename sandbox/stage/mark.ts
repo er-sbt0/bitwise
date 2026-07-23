@@ -59,9 +59,30 @@ export type Mark = {
   /** Set values *instantly* — no tween. Used to stage a mark before a beat. */
   set(patch: Record<string, number>): void;
   attach(el: Element | null, opts?: { draw?: boolean }): void;
+  /** Live numeric reads: `mark.opacity` is `mark.get("opacity")`. Every channel
+   *  (seeded, standard, or created later by `value()`) shows up here. */
+  readonly [channel: string]: any;
 };
 
 let nextId = 0;
+
+// Every live mark, so `<Custom>` can re-render itself while ANY of them is being
+// animated without the author having to declare a subscription (see scene.tsx).
+// Marks are created per component instance and the sandbox tears the whole tree
+// down between lessons; a WeakSet wouldn't be iterable, and the set is tiny.
+const registry = new Set<Mark>();
+export const liveMarks = (): Mark[] => [...registry];
+
+/** Drop every registered mark. Called by the harness before it mounts a new
+ *  lesson: marks are registered at CREATION (so a `<Custom>` can subscribe on
+ *  the very first frame) and unregistered on unmount — but a lesson that threw
+ *  mid-render never unmounts what it made, so those would accumulate across a
+ *  repair loop. Safe to call before `root.render`: the outgoing tree's cleanups
+ *  then find nothing to remove, and the incoming tree re-registers as it builds. */
+export const resetMarks = (): void => registry.clear();
+
+/** Property names on the handle itself — a channel may never shadow one. */
+const RESERVED = new Set(["id", "values", "value", "get", "set", "attach"]);
 
 function createMark(initial?: Record<string, number>): Mark {
   // pathLength starts undrawn and opacity visible: the two defaults that make
@@ -76,19 +97,34 @@ function createMark(initial?: Record<string, number>): Mark {
     if (!values[k]) values[k] = motionValue(v);
   }
 
-  const value = (name: string) => (values[name] ??= motionValue(0));
+  // Creating a channel also exposes it as a LIVE read on the handle itself, so
+  // freeform code reads `corner.opacity` (a number, now) the way it reads
+  // `s.filled` off the store — no `.get("…")` ceremony, nothing to forget. The
+  // getter reads the MotionValue on every access, so it is never stale.
+  const value = (name: string) => {
+    let v = values[name];
+    if (!v) {
+      v = values[name] = motionValue(0);
+      expose(name);
+    }
+    return v;
+  };
+  const expose = (name: string) => {
+    if (RESERVED.has(name) || Object.prototype.hasOwnProperty.call(mark, name)) return;
+    Object.defineProperty(mark, name, { get: () => values[name].get(), enumerable: true });
+  };
 
   let detach: (() => void) | null = null;
 
-  return {
+  const mark: Mark = {
     id: nextId++,
     values,
-    value,
-    get: (name) => value(name).get(),
-    set: (patch) => {
+    value: (name: string) => value(name),
+    get: (name: string) => value(name).get(),
+    set: (patch: Record<string, number>) => {
       for (const [k, v] of Object.entries(patch)) value(k).set(v);
     },
-    attach: (el, { draw = true } = {}) => {
+    attach: (el: Element | null, { draw = true }: { draw?: boolean } = {}) => {
       detach?.();
       detach = null;
       if (!el) return;
@@ -105,6 +141,10 @@ function createMark(initial?: Record<string, number>): Mark {
       detach = () => offs.forEach((o) => o());
     },
   };
+
+  Object.keys(values).forEach(expose);
+  registry.add(mark);
+  return mark;
 }
 
 /**
@@ -116,5 +156,18 @@ function createMark(initial?: Record<string, number>): Mark {
 export function useMark(initial?: Record<string, number>): Mark {
   const ref = React.useRef<Mark | null>(null);
   if (!ref.current) ref.current = createMark(initial);
-  return ref.current;
+  const mark = ref.current;
+  // createMark registers eagerly — a `<Custom>` child subscribes in a layout
+  // effect that runs BEFORE this parent's effect, and an unregistered mark would
+  // leave the first animation unsubscribed. The effect only owns the *removal*,
+  // so the registry doesn't accumulate marks from previous lessons (the sandbox
+  // frame is reused across generations). Re-adding on mount keeps StrictMode's
+  // mount/unmount/mount cycle honest.
+  React.useEffect(() => {
+    registry.add(mark);
+    return () => {
+      registry.delete(mark);
+    };
+  }, [mark]);
+  return mark;
 }
