@@ -12,6 +12,14 @@ public/fonts/
 # Eval harness bundle (scripts/eval.mjs)
 .bitwise-eval.mjs
 
+# Browser harness screenshots (scripts/browser-test.mjs)
+.bitwise-shots/
+
 # Env
 .env
 .env.local
+
+# Spike build artifacts (sources + findings + screenshots are tracked)
+docs/spikes/*/spike.js
+docs/spikes/*/spike.js.map
+docs/spikes/*/core.css

@@ -1,0 +1,12 @@
+[
+  { "screenshot": "golden-initial" },
+  { "clickText": "Play one step" },
+  { "wait": 1500 },
+  { "screenshot": "golden-after-one-step" },
+  { "clickText": "Run" },
+  { "wait": 2500 },
+  { "screenshot": "golden-after-run" },
+  { "drag": { "selector": "circle[style*=\"cursor: grab\"]", "dx": 40, "dy": 0 } },
+  { "wait": 500 },
+  { "screenshot": "golden-after-drag" }
+]

@@ -1,0 +1,9 @@
+[
+  { "screenshot": "smoke-initial" },
+  { "expectText": "Smoke test" },
+  { "eval": "document.querySelector('input[type=range]').value" },
+  { "drag": { "selector": "input[type=range]", "dx": 90, "dy": 0 } },
+  { "wait": 300 },
+  { "eval": "(() => { const v = +document.querySelector('input[type=range]').value; if (v === 1) throw new Error('slider drag did not change the value'); return v })()" },
+  { "screenshot": "smoke-after-slider-drag" }
+]
