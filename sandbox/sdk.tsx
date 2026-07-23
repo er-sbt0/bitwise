@@ -137,7 +137,13 @@ function renderProse(src: string): string {
     parts.push(katex.renderToString(e.trim(), { displayMode: true, throwOnError: false }));
     return `@@M${parts.length - 1}@@`;
   });
-  s = s.replace(/\$([^$\n]+?)\$/g, (_m, e) => {
+  // Inline math may WRAP. A model writing a template literal hard-wraps its
+  // prose, so `$\left(\tfrac{b}{2}\right)^2\n= 9$` is completely ordinary — and
+  // a newline-forbidding pattern left it on screen as raw LaTeX. A blank line
+  // still ends the span (that is a paragraph break, so an unmatched `$` can't
+  // swallow the rest of the lesson), and `$` followed by whitespace is not an
+  // opener, which keeps "$5 and $10" out of KaTeX.
+  s = s.replace(/\$(?![\s$])((?:[^$\n]|\n(?!\s*\n))+?)\$/g, (_m, e) => {
     parts.push(katex.renderToString(e.trim(), { displayMode: false, throwOnError: false }));
     return `@@M${parts.length - 1}@@`;
   });
@@ -324,7 +330,7 @@ function Exercise({ prompt, answer, input, solution, hints, onResult, children }
     : React.Children.toArray(children);
 
   return (
-    <div style={{ border: "1px solid #e3e6ec", borderRadius: 10, padding: 16, margin: "16px 0" }}>
+    <div style={cardStyle}>
       <div style={{ marginBottom: 10 }}>{prompt}</div>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
@@ -332,9 +338,9 @@ function Exercise({ prompt, answer, input, solution, hints, onResult, children }
           onChange={(e) => setVal(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
           placeholder={inputKind === "point" ? "(x, y)" : inputKind === "number" ? "number" : "answer"}
-          style={{ padding: "6px 10px", border: "1px solid #c8cdd8", borderRadius: 6, minWidth: 120 }}
+          style={{ ...inputStyle, minWidth: 130 }}
         />
-        <button onClick={submit} style={{ ...btnStyle, background: "#2f6df0", color: "#fff", borderColor: "#2f6df0" }}>
+        <button onClick={submit} style={{ ...btnStyle, background: "#2f6df0", color: "#fff", borderColor: "#2f6df0", fontWeight: 600 }}>
           Check
         </button>
         {result && (
@@ -371,7 +377,7 @@ function MultipleChoice({ prompt, correct, shuffle, solution, children }: any) {
   const [showSol, setShowSol] = React.useState(false);
 
   return (
-    <div style={{ border: "1px solid #e3e6ec", borderRadius: 10, padding: 16, margin: "16px 0" }}>
+    <div style={cardStyle}>
       <div style={{ marginBottom: 10 }}>{prompt}</div>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {order.map((origIdx) => {
@@ -447,7 +453,35 @@ function useTime({ paused }: { paused?: boolean } = {}): number {
 }
 
 // ---- shared styles ----------------------------------------------------------
-const btnStyle: React.CSSProperties = { padding: "6px 12px", border: "1px solid #c8cdd8", borderRadius: 6, background: "#f4f5f7", cursor: "pointer", font: "inherit" };
+// Kept in step with the bare-element defaults in public/sandbox.html: a lesson
+// mixes SDK controls with buttons it wrote itself, and the two must look like
+// one control set. Inline styles win over the stylesheet, so these ARE the
+// values — changing one without the other is what makes a lesson look assembled.
+const btnStyle: React.CSSProperties = {
+  padding: "7px 14px",
+  border: "1px solid #ccd3e0",
+  borderRadius: 8,
+  background: "linear-gradient(#fff, #f7f8fb)",
+  cursor: "pointer",
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  fontSize: ".92rem",
+  fontWeight: 550,
+  color: "#16191f",
+};
+const inputStyle: React.CSSProperties = {
+  padding: "7px 11px",
+  border: "1px solid #ccd3e0",
+  borderRadius: 8,
+  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  fontSize: ".95rem",
+};
+const cardStyle: React.CSSProperties = {
+  border: "1px solid #e4e7ee",
+  borderRadius: 12,
+  padding: "16px 18px",
+  margin: "20px 0",
+  background: "#fcfdff",
+};
 const rowStyle: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center", margin: "8px 0" };
 const labelStyle: React.CSSProperties = { fontFamily: "ui-monospace, monospace", minWidth: 24, color: "#2f6df0", fontWeight: 600 };
 const valStyle: React.CSSProperties = { fontFamily: "ui-monospace, monospace", minWidth: 44, textAlign: "right" };
