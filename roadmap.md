@@ -6,13 +6,15 @@ path first and thicken it. Because lessons are AI-improvised and disposable,
 scope is fluid on purpose; this roadmap sequences the *engine*, which is the
 only durable thing we build.
 
-> **Status (2026-07-23).** M0 and M1 are **done**. M2 (the curriculum loop) is
+> **Status (2026-07-24).** M0 and M1 are **done**. M2 (the curriculum loop) is
 > **deferred by direction**. The active focus is the **Artifact quality & engine
-> capability** track (Ma) — whose **Phase 2 runtime is now built**: the Stage
-> (clock, store, marks, director, simulation) runs the golden lesson end-to-end
-> in the sandbox, the allow-list is retired, and `npm run eval` is green. What
-> remains for Phase 2 is the *live-generation* proof — that the prompt gets the
-> model to compose the Stage, not merely that the runtime can. Steered by a
+> capability** track (Ma) — whose **Phase 2 is now complete, live-generation proof
+> included**: the Stage (clock, store, marks, director, simulation) runs in the
+> sandbox, the allow-list is retired, `npm run eval` is green, and three
+> unrehearsed concepts each came back as a lesson that composed the Stage
+> *unprompted* and mounted interactively in ~80–95s. The open question is no
+> longer "can it" but **Phase 3 (deepen) vs Phase 4 (stand up the vision-eval
+> gate)** — see the note under Phase 2. Steered by a
 > **pivot (2026-07-23):** from a
 > *curated, verifier-gated widget set* to a **freeform creative runtime**. The
 > LLM composes a rich standard library — and writes custom draw/animate/simulate
@@ -34,7 +36,11 @@ only durable thing we build.
   and interaction quality is gated by a render-and-inspect (vision) eval —
   sequenced after the freeform slice — rather than by a static allow-list.
 - **The wait is the product too.** A minutes-long generation should read as
-  craft via visible pipeline progress — but that polish is later, not M0.
+  craft via visible pipeline progress. **Landed 2026-07-24**, earlier than
+  planned and out of M2's scope, because a 90-second blank screen was actively
+  hiding failures: `/api/generate` streams its stage events, and the plan — which
+  lands ~15s in — puts the lecture's title, essence and argument on screen while
+  the code is still being written.
 
 ## Non-goals (for this horizon)
 
@@ -43,8 +49,14 @@ Explicitly deferred to keep the engine the focus. Not "never" — "not yet."
 - **Accounts & auth** — anonymous, in-session only until M4.
 - **Persistence & a real learner model** — learner state is hard-coded (M0) then
   ephemeral/in-session (M2). No long-term mastery tracking until M4.
-- **Mobile & visual polish** — desktop-first, minimal chrome until the engine is
-  proven.
+- **Mobile** — desktop-first until the engine is proven.
+- ~~**Visual polish**~~ — *partially reclaimed 2026-07-24.* The host chrome and
+  the lesson surface got a deliberate pass: dark studio around a light lesson
+  page (the artifact is the thing being made, not another panel), the frame sized
+  to the lesson rather than scrolling a document inside a window, and typography
+  the model's own bare `<button>`/`<p>` inherit. Justified, not scope creep — an
+  artifact we cannot bear to look at cannot be judged for craft, which is the
+  whole of Ma.
 
 Note: **non-math subjects are *not* a non-goal.** The engine is subject-agnostic
 by design; only the current SDK and lessons are math-first. Expanding beyond math
@@ -159,18 +171,52 @@ now, implement one substrate now.
 - **Phase 1 — SSOT for the SDK surface. ✅ done, now repurposed.** `sdk.d.ts`
   stays the one source of truth, but as std-lib *documentation*; its former role
   as the verifier's hard allow-list is retired under freeform-first.
-- **Phase 2 — thin vertical slice of the creative runtime (runtime built ✅;
-  live-generation proof outstanding).** Go vertical:
-  a minimal **Stage** (one clock, pure render, the three drivers at a basic
-  level), a starter **std-lib** (SVG/Mafs substrate + a few marks + basic director
-  transitions + a basic simulation step), and **freeform authoring** (the LLM
-  writes custom code; the sandbox mounts it; errors + critic are the only gate).
-  Prove one freeform artifact that *animates, is interactive, and runs a basic
-  simulation*, end-to-end — then deepen.
+- **Phase 2 — thin vertical slice of the creative runtime. ✅ done
+  (2026-07-24).** A minimal **Stage** (one clock, pure render, the three
+  drivers), a starter **std-lib** (SVG/Mafs substrate + marks + director
+  transitions + a simulation step), and **freeform authoring** (the LLM writes
+  custom code; the sandbox mounts it; errors + critic are the only gate).
+
+  **The live-generation proof.** Three unrehearsed concepts — *completing the
+  square*, *Bayes' theorem*, *why eˣ is its own derivative* — each came back as a
+  lesson that reached for `useStage`, `useMark`, `useDirector` and `<Custom>`
+  without being told to, and mounted end-to-end in ~80–95s with the figure
+  driven by a load-bearing control. So the prompt gets the model to compose the
+  Stage; it isn't just the runtime that can.
+
+  **What it cost to get there** — five defects, every one of them *silent*, which
+  is the finding worth keeping:
+  - the host never delivered code to the sandbox at all (the frame's one-shot
+    `ready` raced hydration), so a finished run showed a filled-in meta panel
+    over an empty frame;
+  - the error boundary was never reset between lessons, so after the first throw
+    every self-repair attempt mounted into a dead boundary and reported nothing —
+    the repair loop was hanging on silence, not on a hard error;
+  - `<Custom>` could not read animated mark values, so every director beat over
+    hand-drawn SVG played out invisibly — in the freeform hatch the prompt most
+    encourages;
+  - the verifier hard-rejected a constant-valued derivation on *shape* rather
+    than value, sending the repair loop twice round an error no lesson edit could
+    fix (204s → 93s once removed);
+  - `<Prose>` refused inline `$…$` that wrapped across a line break — which a
+    model hard-wrapping a template literal does constantly — and left the LaTeX
+    on screen mid-paragraph.
+
+  None of these had a red light anywhere; each was found by looking at a
+  screenshot. `npm run test:recover` now guards the worst of them, because
+  nothing else in the suite posts two lessons in a row.
 - **Phase 3 — deepen & extend.** Richer director (transforms, morphing), broader
   vocabulary, the ODE-kernel → physics-engine path, more substrates
   (Canvas / WebGL / 3D).
 - **Phase 4 — stand up the R6 vision-eval gate** (freedom first, eval next).
+
+> **Open decision: Phase 3 or Phase 4 next?** "Freedom first, eval next" put the
+> gate after the freeform slice, and the slice is now done — so Phase 4 is due on
+> its own terms. The argument for taking it before Phase 3: every defect above
+> was invisible to the eval battery and visible in a screenshot. Deepening the
+> director multiplies exactly that class of failure while we are still judging it
+> by eye. The argument for Phase 3 first is the usual one — a richer runtime
+> gives the eval more worth grading.
 
 **Candidate stack.** Draw: **Mafs** (SVG) → **Observable Plot**,
 **react-three-fiber** later. Animate: **Motion** / **react-spring** + a timeline
@@ -199,10 +245,22 @@ in-house **RK4 + seeded RNG** → **Rapier** / **matter.js** later. Compute:
 - **Physics engine** — Rapier / matter.js as a `useSimulation` stepper (Phase 3).
 - **Motion library size** — if Motion proves too heavy for the scalar-tween job,
   revisit a lean hand-rolled tween (the W0 runner-up).
+- **`<Custom>` re-renders per frame while any mark animates** (2026-07-24) — the
+  only way a draw function that computes its SVG in JS can follow a tween, and it
+  costs nothing at rest since a MotionValue only fires during a beat. It is still
+  the one place in the scene layer that renders per frame; revisit if a dense
+  freeform figure shows it.
+- **Silent-failure coverage** — Phase 2's four defects all failed quietly. The
+  eval battery checks *outputs*; nothing checks that the engine still reports
+  honestly when a lesson breaks. `npm run test:recover` is the first of these;
+  more belong wherever the pipeline can end in silence rather than in an error.
 
-**Done when:** a single freeform-authored lesson reliably delivers a cinematic,
+**Done when:** ~~a single freeform-authored lesson reliably delivers a cinematic,
 interactive, simulation-backed figure end-to-end — mounted safely, repaired on
-error — even before the vision-eval gate lands.
+error — even before the vision-eval gate lands.~~ **Met 2026-07-24** for
+animation + interaction + safe mount + repair; the *simulation-backed* half is
+proven by the golden lesson rather than by a live generation (no live run has yet
+reached for `useSimulation` on its own), so the bar is met but not saturated.
 
 **Not yet:** the curriculum loop (M2); the R6 vision-eval gate (Phase 4).
 
@@ -227,8 +285,9 @@ authored lessons in a single session — the curriculum is chosen on the fly.
   what's next. No pre-authored concept graph.
 - **Ephemeral in-session learner state**: mastery signal from exercise results
   steers difficulty and next-concept choice. Not persisted.
-- **Progress UI** surfacing the pipeline stages ("Designing… Building… Checking
-  the math… Polishing… Ready").
+- ~~**Progress UI** surfacing the pipeline stages~~ — **already landed
+  (2026-07-24)**, pulled out of M2 by "the wait is the product too": the route
+  streams stage events and the host renders them live. M2 inherits it.
 - **Speculative prefetch**: author the 1–2 likely next concepts in the
   background so "next" usually feels instant.
 
