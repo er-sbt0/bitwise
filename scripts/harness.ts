@@ -130,6 +130,67 @@ const FIXTURES: Fixture[] = [
     expect: { ok: false, gates: ["answer"] },
   },
   {
+    // A plan that writes `simplify` where it means "work this constant out" is
+    // ORDINARY, and its canonical is right — 16 really is (8/2)². The verifier
+    // used to reject the shape rather than the value, which sent the repair loop
+    // twice round an error no lesson edit could fix. It must re-derive instead.
+    name: "constant-valued derivation against a numeric canonical — re-derived, not rejected",
+    plan: {
+      ...MOCK_PLAN,
+      assessments: [
+        {
+          ask: "What constant completes the square for x² + 8x?",
+          answer: { type: "numeric", value: 16, tolerance: 0.001 },
+          derivation: { given: "(8/2)^2", op: "simplify" },
+        },
+      ],
+    },
+    code: skeleton(
+      "",
+      `<Exercise prompt={<Prose>{\`constant?\`}</Prose>} answer={{ type: "numeric", value: 16, tolerance: 0.001 }} input="number" />`,
+    ),
+    expect: { ok: true, gates: [] },
+  },
+  {
+    // …and it still CATCHES a wrong canonical through the same path.
+    name: "constant-valued derivation disagrees with the canonical",
+    plan: {
+      ...MOCK_PLAN,
+      assessments: [
+        {
+          ask: "What constant completes the square for x² + 8x?",
+          answer: { type: "numeric", value: 64, tolerance: 0.001 },
+          derivation: { given: "(8/2)^2", op: "simplify" },
+        },
+      ],
+    },
+    code: skeleton(
+      "",
+      `<Exercise prompt={<Prose>{\`constant?\`}</Prose>} answer={{ type: "numeric", value: 64, tolerance: 0.001 }} input="number" />`,
+    ),
+    expect: { ok: false, gates: ["answer"] },
+  },
+  {
+    // Genuinely incomparable shapes are the PLAN's defect, not the lesson's:
+    // reported so the run is honest about what went unchecked, but never a block.
+    name: "unusable derivation (expression result, point canonical) — soft, not blocking",
+    plan: {
+      ...MOCK_PLAN,
+      assessments: [
+        {
+          ask: "where is the vertex?",
+          answer: { type: "point", x: 3, y: 5 },
+          derivation: { given: "2*x + 1", op: "simplify" },
+        },
+      ],
+    },
+    code: skeleton(
+      "",
+      `<Exercise prompt={<Prose>{\`vertex?\`}</Prose>} answer={{ type: "point", x: 3, y: 5 }} input="point" />`,
+    ),
+    expect: { ok: true, gates: ["answer"] },
+  },
+  {
     name: "grades an answer the plan never committed to",
     plan: noAssess,
     code: skeleton(

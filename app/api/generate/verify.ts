@@ -235,10 +235,17 @@ function checkAnswers(plan: LessonPlan, answers: ExtractedAnswer[]): VerifyFindi
     if (assessment.derivation) {
       const red = recheckDerivation(assessment.derivation, assessment.answer);
       if (!red.ok) {
+        // `unusable` means the PLAN's derivation doesn't line up with its own
+        // canonical — the lesson is grading exactly what it was told to, so
+        // there is nothing for a repair pass to fix. Hard-flagging it sent the
+        // model round the repair loop twice for nothing and still ended the run
+        // in `verify: error`. Report it, don't block on it.
         findings.push({
           gate: "answer",
-          severity: "hard",
-          detail: `canonical answer for "${assessment.ask}" fails independent re-derivation: ${red.reason}.`,
+          severity: red.unusable ? "soft" : "hard",
+          detail: red.unusable
+            ? `the plan's derivation for "${assessment.ask}" could not be used to re-check its canonical answer: ${red.reason}. The graded answer still matches the plan, but nothing independently confirmed it.`
+            : `canonical answer for "${assessment.ask}" fails independent re-derivation: ${red.reason}.`,
         });
       }
     }

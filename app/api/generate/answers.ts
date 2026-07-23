@@ -142,6 +142,44 @@ export interface Rederivation {
   /** The answer the CAS independently computed, when representable. */
   computed?: CanonicalAnswer;
   reason?: string;
+  /** True when the derivation could not be COMPARED to the canonical at all —
+   *  a plan-side defect (mismatched shapes), not evidence the answer is wrong.
+   *  The caller must not treat this as a hard finding: the lesson grades exactly
+   *  what the plan asked for, so there is nothing a repair pass could change,
+   *  and reporting it as hard burns the repair budget on an unfixable error. */
+  unusable?: boolean;
+}
+
+/** A constant expression's value, or NaN. Lets a `simplify`/`derivative`
+ *  derivation whose result is a plain number be checked against a numeric
+ *  canonical — e.g. given "(8/2)^2" simplifying to 16 — instead of being thrown
+ *  out on a type mismatch. */
+function constantValue(expr: string): number {
+  try {
+    const v = Number(math.evaluate(expr, {}));
+    return isFinite(v) ? v : NaN;
+  } catch {
+    return NaN;
+  }
+}
+
+/** Compare a CAS-computed EXPRESSION against whatever canonical shape the plan
+ *  committed to. Returns null when the two shapes can't be compared. */
+function matchComputedExpression(computed: string, canonical: CanonicalAnswer): Rederivation | null {
+  if (canonical.type === "expression") {
+    const target = String(canonical.value);
+    return exprEquivalent(computed, target, canonical.vars ?? ["x"])
+      ? { ok: true, computed: { type: "expression", value: computed } }
+      : { ok: false, computed: { type: "expression", value: computed }, reason: `CAS gave "${computed}" ≠ canonical "${target}"` };
+  }
+  if (canonical.type === "numeric") {
+    const v = constantValue(computed);
+    if (isNaN(v)) return null; // not a constant — genuinely incomparable
+    return numEqual(v, canonical.value, canonical.tolerance ?? 1e-6)
+      ? { ok: true, computed: { type: "numeric", value: v } }
+      : { ok: false, computed: { type: "numeric", value: v }, reason: `CAS gave ${v} ≠ canonical ${canonical.value}` };
+  }
+  return null;
 }
 
 /** Recompute the canonical answer from its derivation and confirm it matches the
@@ -153,26 +191,45 @@ export function recheckDerivation(d: Derivation, canonical: CanonicalAnswer): Re
     switch (d.op) {
       case "derivative": {
         const computed = math.derivative(d.given, v).toString();
-        const target = canonical.type === "expression" ? String(canonical.value) : null;
-        if (target == null) return { ok: false, reason: `derivative expects an expression canonical, got ${canonical.type}` };
-        return exprEquivalent(computed, target, [v])
-          ? { ok: true, computed: { type: "expression", value: computed, vars: [v] } }
-          : { ok: false, computed: { type: "expression", value: computed, vars: [v] }, reason: `CAS derivative "${computed}" ≠ canonical "${target}"` };
+        return (
+          matchComputedExpression(computed, canonical) ?? {
+            ok: false,
+            unusable: true,
+            reason: `derivative of "${d.given}" is "${computed}", which cannot be checked against a ${canonical.type} canonical`,
+          }
+        );
       }
       case "simplify": {
         const computed = math.simplify(d.given).toString();
-        if (canonical.type !== "expression") return { ok: false, reason: `simplify expects an expression canonical, got ${canonical.type}` };
-        return exprEquivalent(computed, String(canonical.value), canonical.vars ?? [v])
-          ? { ok: true, computed: { type: "expression", value: computed } }
-          : { ok: false, computed: { type: "expression", value: computed }, reason: `CAS simplify "${computed}" ≠ canonical "${canonical.value}"` };
+        return (
+          matchComputedExpression(computed, canonical) ?? {
+            ok: false,
+            unusable: true,
+            reason: `simplify of "${d.given}" is "${computed}", which cannot be checked against a ${canonical.type} canonical`,
+          }
+        );
       }
       case "evaluate": {
         const scope = d.at != null ? { [v]: d.at } : {};
         const computed = Number(math.evaluate(d.given, scope));
-        if (canonical.type !== "numeric") return { ok: false, reason: `evaluate expects a numeric canonical, got ${canonical.type}` };
-        return numEqual(computed, canonical.value, canonical.tolerance ?? 1e-6)
+        // An `evaluate` derivation against an EXPRESSION canonical is still
+        // checkable whenever that expression is itself constant.
+        const target =
+          canonical.type === "numeric"
+            ? canonical.value
+            : canonical.type === "expression"
+              ? constantValue(String(canonical.value))
+              : NaN;
+        if (isNaN(target))
+          return {
+            ok: false,
+            unusable: true,
+            reason: `evaluate produced ${computed}, which cannot be checked against a ${canonical.type} canonical`,
+          };
+        const tol = canonical.type === "numeric" ? (canonical.tolerance ?? 1e-6) : 1e-6;
+        return numEqual(computed, target, tol)
           ? { ok: true, computed: { type: "numeric", value: computed } }
-          : { ok: false, computed: { type: "numeric", value: computed }, reason: `CAS evaluate = ${computed} ≠ canonical ${canonical.value}` };
+          : { ok: false, computed: { type: "numeric", value: computed }, reason: `CAS evaluate = ${computed} ≠ canonical ${target}` };
       }
       case "identity":
         return { ok: true };
