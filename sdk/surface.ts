@@ -29,35 +29,12 @@ export interface SdkEntry {
   kind: Kind;
 }
 
-// ── baked fallback ───────────────────────────────────────────────────────────
-// Last-resort fallback, used only if sdk.d.ts can't be read (e.g. a bundled
-// deploy where the source file isn't shipped). Nothing checks it — the harness
-// parses the real file — so it can lag the contract; hand-refresh it when the
-// surface moves. Its only job is to keep a reader from seeing an empty surface.
-
-const BAKED: SdkEntry[] = [
-  // top-level · live
-  ...(
-    [
-      "fmt", "math", "useLessonState", "useTime", "track",
-      "useState", "useEffect", "useMemo", "useRef", "useCallback",
-      "Section", "Prose", "Math", "Callout", "Steps", "Step", "Reveal", "Hint",
-      "Plot", "Slider", "Toggle", "NumberInput", "Exercise", "MultipleChoice", "Option",
-    ] as const
-  ).map((name): SdkEntry => ({ name, tier: "core", status: "live", kind: "top" })),
-  // top-level · planned
-  ...(
-    ["NumberLine", "Geometry", "Chart", "Distribution", "RangeSlider", "Dropdown", "Tween"] as const
-  ).map((name): SdkEntry => ({ name, tier: "ext", status: "planned", kind: "top" })),
-  // Plot members · live
-  ...(
-    ["OfX", "Point", "MovablePoint"] as const
-  ).map((name): SdkEntry => ({ name, tier: "core", status: "live", kind: "plot-member" })),
-  // Plot members · planned
-  ...(
-    ["OfY", "Parametric", "Segment", "Vector", "Line", "Polygon", "Circle", "Inequality", "Text"] as const
-  ).map((name): SdkEntry => ({ name, tier: "ext", status: "planned", kind: "plot-member" })),
-];
+// There is deliberately NO baked fallback list here. There used to be one, for a
+// bundled deploy that couldn't read sdk.d.ts — but the only consumer left is the
+// eval harness, which always runs from the repo root, and the copy had already
+// gone stale (it was missing all 13 Stage names and still called Segment/Polygon
+// planned). A stale fallback is worse than none: the doc gate would quietly
+// compare the runtime against fiction and pass. Fail loudly instead.
 
 // ── parser ───────────────────────────────────────────────────────────────────
 
@@ -127,18 +104,18 @@ function parseSurface(src: string): SdkEntry[] {
 
 let cache: SdkEntry[] | null = null;
 
-/** The parsed SDK surface, or the baked fallback if the contract can't be read. */
+/** The parsed SDK surface. Throws if the contract can't be read or parsed —
+ *  every consumer is a gate, and a gate that silently degrades is not a gate. */
 export function sdkSurface(): SdkEntry[] {
   if (cache) return cache;
-  try {
-    const src = readFileSync(join(process.cwd(), "sdk", "sdk.d.ts"), "utf8");
-    const parsed = parseSurface(src);
-    // A parse that finds nothing means the file moved/changed shape — fall back
-    // rather than silently allow-listing an empty surface.
-    cache = parsed.length >= 10 ? parsed : BAKED;
-  } catch {
-    cache = BAKED;
+  const path = join(process.cwd(), "sdk", "sdk.d.ts");
+  const parsed = parseSurface(readFileSync(path, "utf8"));
+  // A near-empty parse means the file moved or changed shape, not that the SDK
+  // shrank to nothing; say so rather than reporting a surface that isn't real.
+  if (parsed.length < 10) {
+    throw new Error(`${path}: parsed only ${parsed.length} SDK entries — the contract's shape changed, fix the parser in sdk/surface.ts`);
   }
+  cache = parsed;
   return cache;
 }
 
