@@ -121,3 +121,68 @@ LLM never captures a stale value in a closure.
   the `useDirector(initialChannels)` bag above is the chosen shape; whether channels
   are later refined into *mark-scoped* `drawTo(mark)` (both A and C authors wished
   for it) is a Phase-3 nicety, not needed for the slice.
+
+---
+
+## UPDATE (W1 lock, 2026-07-23) — mark-scoped supersedes the channel bag
+
+Direction call: **pull the mark-scoped idea forward into W1** (not Phase 3), and
+adopt **Mafs** as the substrate and **Motion** as the interpolation engine. The
+channel-bag amendment above is **superseded** — retained here for the reasoning
+trail, but the built API is mark-scoped. The synergy that made this cheap: Motion's
+`pathLength` MotionValue and imperative `animate(value, target)` map *directly* onto
+`drawTo`/`transformTo`, so retained-mode is arguably *simpler* to build on Motion
+than the channel bag was.
+
+### The mark-scoped API (what W1 builds)
+
+```ts
+const s = useStage({ x0: -1.5, iters: [] })   // DOMAIN state only
+
+// MARK IDENTITY — a handle you attach to a mark via `mark={...}`.
+// Two flavors of animatable prop live on the handle:
+//   · drawable marks (Segment/Line/OfX/Polygon) expose a `pathLength` (draw-on)
+//   · all marks expose position (x,y,…) + `opacity` as Motion MotionValues
+const vert   = useMark()          // a segment to reveal
+const marker = useMark({ x: -1.5 }) // a point to move; position lives on the handle
+
+const dir = useDirector()
+
+// BEATS — each targets a specific mark (or the store):
+drawTo(mark, opts?)                 // animate pathLength 0→1 (reveal). Geometry stays declarative.
+transformTo(mark, { x, y, … }, opts?) // animate the mark's own position values
+fadeTo(mark, opacity, opts?)
+call(fn)                            // zero-duration; semantic commit via s.set(...)
+sequence(beats) | parallel(beats) | stagger(beats, { each }) | wait(seconds)
+
+dir.play(beat): Promise<void>
+dir.playing: boolean
+dir.reset(): void                   // pathLengths→0, stop transforms, cancel in-flight (ONE call on interaction)
+```
+
+### The key semantic that resolves "who owns position"
+
+- **Draw-on** (`drawTo`): the mark's **geometry is declarative** (endpoints bound to
+  state/props); only the *reveal fraction* (`pathLength`) is animated. No conflict.
+- **Move** (`transformTo`): the mark's **position lives on its handle** (a
+  MotionValue), not in the store; the mark renders from the handle. Interactive,
+  state-bound marks (the draggable guess) are separate and never director-animated.
+
+So a figure cleanly splits into **state-bound** marks (interaction) and
+**handle-bound** marks (scripted motion) — the same domain/presentation separation
+that killed friction #1, now enforced by *which* binding a mark uses rather than by
+author discipline.
+
+### Substrate: Mafs, wrapped
+
+`Plot.*` (`OfX`/`Point`/`MovablePoint`/`Segment`/`Polygon`) become thin wrappers over
+Mafs primitives, extended with the `mark` handle. Wrapping (vs. authoring raw Mafs)
+keeps the authoring surface ours + stable, lets us inject the mark/animation layer,
+and keeps Mafs swappable for Canvas/3D later. Director-animated geometry that Mafs
+can't express is rendered by our own SVG layer (the `<Custom>` path) driven by the
+same MotionValues.
+
+### Accepted costs (tracked as roadmap TODOs)
+
+Bundle jump (Mafs + Motion on ~4.1 MB), a real Mafs integration + React-19 peer
+resolution, and rewriting the golden lesson to the mark-scoped shape.

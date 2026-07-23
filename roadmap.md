@@ -172,6 +172,26 @@ sequencer (or **GSAP**); **flubber** / **d3-interpolate** for morphs. Simulate:
 in-house **RK4 + seeded RNG** → **Rapier** / **matter.js** later. Compute:
 **mathjs** (→ CAS). Explain: **KaTeX** + scroll/step binding.
 
+**Locked for W1 (2026-07-23), after the W0 spike** (`docs/spikes/w0/DECISION.md`):
+- **Director = mark-scoped, retained-mode.** Marks have identity (`useMark`);
+  the director animates a *specific mark* — `drawTo` / `transformTo` / `fadeTo` —
+  rather than a channel bag. (Chosen over the channel amendment; Motion's
+  `pathLength` + imperative `animate()` map onto it directly.)
+- **Substrate = adopt Mafs now** (React + SVG), wrapped behind our own `Plot.*`
+  names so the authoring surface stays ours and Mafs stays swappable.
+- **Interpolation = Motion (Framer Motion)** drives the director's tweens.
+- **Build W1 solo**, against the mark-scoped golden lesson as its acceptance test.
+
+**TODO (deferred, tracked here):**
+- **Other substrates** — Canvas (dense/particles) and WebGL/**react-three-fiber**
+  (3D) behind the same `Plot.*`/Scene API (Phase 3).
+- **Bundle budget & lazy-loading** — the sandbox bundle is already ~4.1 MB before
+  Mafs + Motion; set a budget and lazy-load heavy substrates. This moved up from
+  "later" to a **near-term concern** the moment Mafs + Motion land (W1/W5).
+- **Physics engine** — Rapier / matter.js as a `useSimulation` stepper (Phase 3).
+- **Motion library size** — if Motion proves too heavy for the scalar-tween job,
+  revisit a lean hand-rolled tween (the W0 runner-up).
+
 **Done when:** a single freeform-authored lesson reliably delivers a cinematic,
 interactive, simulation-backed figure end-to-end — mounted safely, repaired on
 error — even before the vision-eval gate lands.

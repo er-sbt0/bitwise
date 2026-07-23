@@ -1,26 +1,32 @@
 /**
  * GOLDEN REFERENCE LESSON — "Newton's method, following the tangent to a root."
  *
- * Output of the W0 spike (see docs/spikes/w0/DECISION.md). Authored against the
- * chosen Stage shape: **declarative render + imperative director, with the
- * director owning its own animation channels** so transient view state never
- * pollutes the domain store. This file is three things at once:
- *   1. the API decision made concrete,
+ * The W0 spike (docs/spikes/w0/DECISION.md) chose a **mark-scoped, retained-mode
+ * director** over the channel bag: marks have identity (`useMark`), and the
+ * director animates a *specific mark* (`drawTo` / `transformTo` / `fadeTo`).
+ * Substrate is **Mafs** (wrapped behind our `Plot.*` names); **Motion** drives
+ * the tweens. This file is three things at once:
+ *   1. the API decision made concrete (the W1 build target),
  *   2. the few-shot the authoring prompt will lead with,
- *   3. the Phase-2 acceptance target (it must run once the runtime exists).
+ *   3. the Phase-2 acceptance test (it must run once the runtime exists).
  *
- * It exercises all three Stage drivers on one figure:
- *   · INTERACTION — drag the guess x0 along the x-axis (Plot.MovablePoint).
- *   · DIRECTION   — dir.play(sequence([...])) animates ONE Newton step, then a
- *                   guided four-step reveal. View motion rides director CHANNELS
- *                   (climb/tan/slide), not the domain store.
- *   · EMULATION   — useSimulation iterates x_{n+1}=x_n−f/f' on the engine clock.
- *   · FREEFORM    — <Custom> shades the tangent's right-triangle + arrowhead.
+ * ── ASSUMED STD-LIB (what W1 implements; injected in scope, no imports) ──────
+ *   useStage(initial)                     → domain state; s.field (read), s.set(patch)
+ *   useMark(initial?)                     → a handle; attach via <Mark mark={handle}/>.
+ *                                           drawable marks expose pathLength (draw-on);
+ *                                           all marks expose position + opacity.
+ *                                           handle.set(patch) sets its values instantly.
+ *   useDirector()                         → dir.play(beat), dir.playing, dir.reset()
+ *   useSimulation(store, step, opts)      → { start, stop, reset, running }
+ *   Beats: drawTo(mark, opts?) · transformTo(mark, target, opts?) · fadeTo(mark, o, opts?)
+ *          call(fn) · sequence(beats) · parallel(beats) · stagger(beats,{each}) · wait(s)
+ *   Marks (Mafs-backed): Plot, Plot.OfX, Plot.Point, Plot.Segment, Plot.MovablePoint,
+ *          Plot.Polygon; a `mark` prop on any of them binds the handle; `<Custom>`
+ *          is the freeform SVG hatch. Prose/Math/Callout/Steps/Exercise/… unchanged.
  *
- * No imports — the std-lib is injected in scope inside the sandbox. House rule:
- * no computed number is ever a prose literal — every one is interpolated with
- * ${fmt(...)}. The one bare literal is the Exercise answer-spec, which the CAS
- * re-check reads; that is the determinism boundary, and it is allowed.
+ * House rule: no computed number is ever a prose literal — always ${fmt(...)}. The
+ * one bare literal is the Exercise answer-spec the CAS re-check reads (the
+ * determinism boundary), which is allowed.
  */
 
 export const meta: LessonMeta = {
@@ -39,19 +45,18 @@ export default function Lesson() {
   // fling bad guesses far — a good basin to explore. Arithmetic in JS only.
   const f = (x: number) => x ** 3 - 2 * x - 2
   const df = (x: number) => 3 * x ** 2 - 2
-  const step = (x: number) => x - f(x) / df(x) // one Newton iterate
-  const lerp = (a: number, b: number, t: number) => a + (b - a) * t
+  const stepFn = (x: number) => x - f(x) / df(x) // one Newton iterate
 
   // DOMAIN state — only what the lesson is *about*.
-  //   x0          : the interactive guess (dragged / slid along the axis)
-  //   iter, iters : the EMULATION state — current iterate + full history
   const s = useStage({ x0: -1.5, iter: -1.5, iters: [] as number[] })
 
-  // PRESENTATION channels — owned by the director, NOT the domain store.
-  //   climb : 0→1  vertical rises from (x0,0) up to (x0,f(x0))
-  //   tan   : 0→1  tangent line draws out toward the axis crossing
-  //   slide : 0→1  marker slides along the axis to xNext
-  const dir = useDirector({ climb: 0, tan: 0, slide: 0 })
+  // HANDLE-BOUND marks — the director animates these directly. Their motion never
+  // touches the domain store (that separation is what W0 friction #1 was about).
+  const vert = useMark() //             vertical (x0,0)→(x0,f(x0)) — draw-on
+  const tang = useMark() //             tangent line — draw-on
+  const marker = useMark({ x: -1.5 }) // the point that slides to xNext — transform
+
+  const dir = useDirector()
 
   // EMULATION — a discrete map stepped at a fixed rate off the engine clock.
   // Returning null halts the sim (converged, or ran long enough).
@@ -60,28 +65,28 @@ export default function Lesson() {
     (st) => {
       const x = st.iter
       if (Math.abs(f(x)) < 1e-9 || st.iters.length > 18) return null
-      const xn = step(x)
+      const xn = stepFn(x)
       return { iter: xn, iters: [...st.iters, xn] }
     },
-    { rate: 1.6 }, // ~1.6 iterations/second, independent of render fps
+    { rate: 1.6 },
   )
 
-  // DIRECTION — one step's beats. tween(channel,…) moves a director channel;
-  // call(fn) is a zero-duration beat for the semantic commit (x0 := xNext).
-  const oneStep = (x: number) =>
-    sequence([
+  // DIRECTION — one step, addressed at specific marks. Geometry stays declarative
+  // (the segments below read x0); the beats only reveal/move the marks.
+  const oneStep = (x: number) => {
+    const xn = stepFn(x)
+    return sequence([
       call(() => {
-        s.set({ x0: x })
-        dir.reset() // one reset — channels can't be left half-drawn
+        s.set({ x0: x }) // reposition the (declarative) segment endpoints
+        dir.reset() //      pathLengths→0, cancel in-flight
+        marker.set({ x }) // stage the marker at the current guess
       }),
-      tween("climb", 1, { duration: 0.5, ease: "easeOut" }), // rise to the curve
-      tween("tan", 1, { duration: 0.6, ease: "linear" }), //     draw the tangent
-      tween("slide", 1, { duration: 0.7, ease: "easeInOut" }), // slide to xNext
-      call(() => {
-        s.set({ x0: step(x) }) // commit: the crossing becomes the next guess
-        dir.reset()
-      }),
+      drawTo(vert, { duration: 0.5, ease: "easeOut" }), //   rise to the curve
+      drawTo(tang, { duration: 0.6 }), //                    draw the tangent
+      transformTo(marker, { x: xn }, { duration: 0.7, ease: "easeInOut" }), // slide
+      call(() => s.set({ x0: xn })), //                      commit: crossing → next guess
     ])
+  }
 
   const playOne = () => dir.play(oneStep(s.x0))
 
@@ -92,7 +97,7 @@ export default function Lesson() {
     for (let i = 0; i < 4; i++) {
       beats.push(oneStep(x))
       beats.push(wait(0.25))
-      x = step(x)
+      x = stepFn(x)
     }
     dir.play(sequence(beats))
   }
@@ -107,13 +112,10 @@ export default function Lesson() {
     sim.start()
   }
 
-  // ---- derived geometry, read straight off state + channels (pure) ----------
+  // ---- geometry, read straight off state (pure) -----------------------------
   const x0 = s.x0
   const y0 = f(x0)
-  const xNext = step(x0) // where the tangent meets y = 0
-  const tanX = lerp(x0, xNext, dir.tan) // tangent draw head
-  const tanY = lerp(y0, 0, dir.tan)
-  const markX = lerp(x0, xNext, dir.slide) // the sliding marker
+  const xNext = stepFn(x0) // where the tangent meets y = 0
   const root = 1.7692923542386314 // f(root) = 0, for the callout
   const resid = s.iters.length ? f(s.iters[s.iters.length - 1]) : f(x0)
 
@@ -140,51 +142,44 @@ Drag the guess below, then press **Play one step** to watch a single tangent sli
         <Plot x={[-3, 4]} y={[-6, 8]} height={360}>
           <Plot.OfX y={f} color="blue" />
 
-          {/* FREEFORM: the tangent step's right triangle + an arrowhead — geometry
-              the stock marks don't give us, in figure coords. Opacity fades in
-              with the climb channel. */}
+          {/* FREEFORM: the tangent step's right triangle + an arrowhead at the
+              crossing — geometry the stock marks don't give us, in figure coords. */}
           <Custom
             draw={({ xToPx, yToPx }: any) => {
-              const A = [xToPx(x0), yToPx(0)] // foot on the axis
-              const B = [xToPx(x0), yToPx(dir.climb * y0)] // up the vertical
-              const C = [xToPx(xNext), yToPx(0)] // tangent's axis crossing
-              const head = [xToPx(tanX), yToPx(tanY)]
+              const A = [xToPx(x0), yToPx(0)]
+              const B = [xToPx(x0), yToPx(y0)]
+              const C = [xToPx(xNext), yToPx(0)]
               const ang = Math.atan2(yToPx(0) - yToPx(y0), xToPx(xNext) - xToPx(x0))
               return (
                 <g>
                   <path
                     d={`M${A[0]},${A[1]} L${B[0]},${B[1]} L${C[0]},${C[1]} Z`}
                     fill="#7b5bd6"
-                    fillOpacity={0.13 * dir.climb}
+                    fillOpacity={0.12}
                     stroke="none"
                   />
-                  {dir.tan > 0.98 && (
-                    <path
-                      d={`M${head[0]},${head[1]} L${head[0] - 9 * Math.cos(ang + 2.6)},${head[1] - 9 * Math.sin(ang + 2.6)} M${head[0]},${head[1]} L${head[0] - 9 * Math.cos(ang - 2.6)},${head[1] - 9 * Math.sin(ang - 2.6)}`}
-                      stroke="#e08a2f"
-                      strokeWidth={2.5}
-                      fill="none"
-                    />
-                  )}
+                  <path
+                    d={`M${C[0]},${C[1]} L${C[0] - 9 * Math.cos(ang + 2.6)},${C[1] - 9 * Math.sin(ang + 2.6)} M${C[0]},${C[1]} L${C[0] - 9 * Math.cos(ang - 2.6)},${C[1] - 9 * Math.sin(ang - 2.6)}`}
+                    stroke="#e08a2f"
+                    strokeWidth={2.5}
+                    fill="none"
+                  />
                 </g>
               )
             }}
           />
 
-          {/* Marks read the director's channels: vertical, tangent, slider. */}
-          <Plot.Segment x1={x0} y1={0} x2={x0} y2={dir.climb * y0} color="violet" dashed />
-          <Plot.Segment x1={x0} y1={y0} x2={tanX} y2={tanY} color="orange" strokeWidth={2.5} />
+          {/* Draw-on marks: declarative geometry (endpoints read x0); the director
+              only reveals them via drawTo(pathLength). */}
+          <Plot.Segment mark={vert} x1={x0} y1={0} x2={x0} y2={y0} color="violet" dashed />
+          <Plot.Segment mark={tang} x1={x0} y1={y0} x2={xNext} y2={0} color="orange" strokeWidth={2.5} />
           <Plot.Point x={x0} y={y0} color="orange" />
-          <Plot.Point x={markX} y={0} color="green" label="x_{n+1}" />
 
-          {/* INTERACTION: drag the guess along the x-axis (y pinned to 0). */}
-          <Plot.MovablePoint
-            x={x0}
-            y={0}
-            color="coral"
-            constrain="horizontal"
-            onMove={(p: any) => onGuess(p.x)}
-          />
+          {/* Handle-bound marker: its x lives on the mark, moved by transformTo. */}
+          <Plot.Point mark={marker} y={0} color="green" label="x_{n+1}" />
+
+          {/* INTERACTION: drag the guess along the x-axis (state-bound, not scripted). */}
+          <Plot.MovablePoint x={x0} y={0} color="coral" constrain="horizontal" onMove={(p: any) => onGuess(p.x)} />
         </Plot>
 
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0" }}>
