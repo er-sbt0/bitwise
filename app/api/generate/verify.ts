@@ -31,9 +31,22 @@ import {
   plannedPlotMembers,
 } from "../../../sdk/surface";
 
-const parser = (Babel as any).packages.parser;
-const traverse = (Babel as any).packages.traverse.default || (Babel as any).packages.traverse;
-const t = (Babel as any).packages.types;
+// Resolved lazily on first use, not at module load. Next.js's build-time
+// "Collecting page data" step imports this route to read its config exports;
+// touching `Babel.packages` at top level crashes there because the property is
+// undefined in that evaluation context. Deferring to request time avoids it.
+let _babel: { parser: any; traverse: any; t: any } | null = null;
+function babel() {
+  if (!_babel) {
+    const pkgs = (Babel as any).packages;
+    _babel = {
+      parser: pkgs.parser,
+      traverse: pkgs.traverse.default || pkgs.traverse,
+      t: pkgs.types,
+    };
+  }
+  return _babel;
+}
 
 // ── findings ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +90,7 @@ function isAllowed(name: string): boolean {
 // ── parsing ──────────────────────────────────────────────────────────────────
 
 function parse(code: string) {
+  const { parser } = babel();
   return parser.parse(code, {
     sourceType: "module",
     plugins: ["jsx", "typescript"],
@@ -88,6 +102,7 @@ function parse(code: string) {
  *  a name is permitted only if it maps to something the sandbox can actually
  *  mount today. */
 function checkAllowlist(ast: any): VerifyFinding[] {
+  const { traverse, t } = babel();
   const bad = new Set<string>();
   const badPlot = new Set<string>();
   const planned = plannedTopLevelNames();
@@ -167,6 +182,7 @@ function evalObjectLiteral(src: string): AnswerSpec | null {
 
 /** Pull every `<Exercise answer={...}>` spec out of the built code. */
 function extractAnswers(code: string, ast: any): ExtractedAnswer[] {
+  const { traverse, t } = babel();
   const out: ExtractedAnswer[] = [];
   traverse(ast, {
     JSXOpeningElement(path: any) {
@@ -185,6 +201,7 @@ function extractAnswers(code: string, ast: any): ExtractedAnswer[] {
 
 /** Interactive state (useLessonState) that is set up but never read. */
 function checkDeadInteractions(ast: any): VerifyFinding[] {
+  const { traverse, t } = babel();
   const findings: VerifyFinding[] = [];
   traverse(ast, {
     VariableDeclarator(path: any) {
