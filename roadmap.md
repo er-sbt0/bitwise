@@ -8,7 +8,12 @@ only durable thing we build.
 
 > **Status (2026-07-23).** M0 and M1 are **done**. M2 (the curriculum loop) is
 > **deferred by direction**. The active focus is the **Artifact quality & engine
-> capability** track (Ma), now steered by a **pivot (2026-07-23):** from a
+> capability** track (Ma) — whose **Phase 2 runtime is now built**: the Stage
+> (clock, store, marks, director, simulation) runs the golden lesson end-to-end
+> in the sandbox, the allow-list is retired, and `npm run eval` is green. What
+> remains for Phase 2 is the *live-generation* proof — that the prompt gets the
+> model to compose the Stage, not merely that the runtime can. Steered by a
+> **pivot (2026-07-23):** from a
 > *curated, verifier-gated widget set* to a **freeform creative runtime**. The
 > LLM composes a rich standard library — and writes custom draw/animate/simulate
 > code — freely; quality is judged by *observed output*, not a static allow-list.
@@ -154,7 +159,8 @@ now, implement one substrate now.
 - **Phase 1 — SSOT for the SDK surface. ✅ done, now repurposed.** `sdk.d.ts`
   stays the one source of truth, but as std-lib *documentation*; its former role
   as the verifier's hard allow-list is retired under freeform-first.
-- **Phase 2 — thin vertical slice of the creative runtime (next).** Go vertical:
+- **Phase 2 — thin vertical slice of the creative runtime (runtime built ✅;
+  live-generation proof outstanding).** Go vertical:
   a minimal **Stage** (one clock, pure render, the three drivers at a basic
   level), a starter **std-lib** (SVG/Mafs substrate + a few marks + basic director
   transitions + a basic simulation step), and **freeform authoring** (the LLM
@@ -185,9 +191,11 @@ in-house **RK4 + seeded RNG** → **Rapier** / **matter.js** later. Compute:
 **TODO (deferred, tracked here):**
 - **Other substrates** — Canvas (dense/particles) and WebGL/**react-three-fiber**
   (3D) behind the same `Plot.*`/Scene API (Phase 3).
-- **Bundle budget & lazy-loading** — the sandbox bundle is already ~4.1 MB before
-  Mafs + Motion; set a budget and lazy-load heavy substrates. This moved up from
-  "later" to a **near-term concern** the moment Mafs + Motion land (W1/W5).
+- **Bundle budget & lazy-loading** — Mafs + Motion landed for **+3.0% raw /
+  +44 kB gz** (4.31 MB → 4.43 MB), far under the spike's +508 kB estimate because
+  esbuild tree-shakes most of both. So this is *less* urgent than feared — but
+  the bundle is still dominated by `@babel/standalone`, and three.js/Rapier in
+  Phase 3 are genuinely heavy. Set a budget before those land.
 - **Physics engine** — Rapier / matter.js as a `useSimulation` stepper (Phase 3).
 - **Motion library size** — if Motion proves too heavy for the scalar-tween job,
   revisit a lean hand-rolled tween (the W0 runner-up).

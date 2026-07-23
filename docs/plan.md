@@ -13,11 +13,18 @@ Phases 3–4 are outlines that firm up as Phase 2 lands.
 > is judged by output (vision-eval, Phase 4). Determinism is relaxed for visuals,
 > **preserved for graded answers**.
 
-> **Progress (2026-07-23).** **W0 done** — API shape chosen
-> (`docs/spikes/w0/DECISION.md`). **W1 in progress** — the mark-scoped API is
-> locked and re-specced as the golden lesson (`sdk/examples/newton.lesson.tsx`),
-> and **Mafs + Motion** are installed; the `sandbox/stage/` runtime is **not yet
-> written** — the immediate next task. See §2 (W1 detail) and §8 (Next steps).
+> **Progress (2026-07-23).** **W0–W6 done.** The `sandbox/stage/` runtime exists
+> (clock, store, mark, director, sim, rng, scene) and the golden lesson
+> `sdk/examples/newton.lesson.tsx` **runs end-to-end in the sandbox** — all three
+> drivers, verified in a real browser (`npm run test:browser -- --path /dev
+> --steps scripts/steps/golden.json`, 21 steps). The allow-list is retired, the
+> BUILD prompt teaches the Stage, and `npm run eval` is green (6/6 doc checks,
+> 9/9 fixtures). Remaining for Phase 2: the **live-generation** demo target —
+> proving the *prompt* gets the model to compose the Stage, not just that the
+> runtime can.
+>
+> The spike that unblocked it is `docs/spikes/w1-hybrid/FINDINGS.md`; two of its
+> findings are load-bearing and easy to re-break — see §6.
 
 ---
 
@@ -36,7 +43,11 @@ bearing abstraction — get it right before breadth.
 ```
 
 - **Clock** — a single rAF loop owns time. Replaces ad-hoc `useTime`. Auto-pauses
-  on hidden tab / `prefers-reduced-motion`. Drives the director and the simulator.
+  on hidden tab. Drives the director and the simulator. **Reduced motion does not
+  pause the clock** (a deliberate departure from the original wording): a
+  simulation is *content*, not decoration, and freezing it empties the lesson.
+  The director consults `prefersReducedMotion()` instead, so beats land instantly
+  on their correct final state — a 6 s sequence completes in ~1 ms.
 - **State store** — one reactive domain store per figure (successor to
   `useLessonState`). Interaction and emulation mutate it; render reads it.
 - **Marks with identity** — `useMark` gives a mark a handle holding Motion values
@@ -102,12 +113,12 @@ self-repairing on error.
 | ID | Workstream | Key tasks | Files | Done when |
 |----|-----------|-----------|-------|-----------|
 | **W0** ✅ | Design spike + reference lesson | Prototyped 3 API shapes; chose **declarative render + imperative director**, then (W1 lock) **mark-scoped / retained-mode** — `useMark` + `drawTo`/`transformTo`, superseding the channel bag | `docs/spikes/w0/` (3 variants + `DECISION.md`), golden `sdk/examples/newton.lesson.tsx` | **DONE** — shape chosen & documented; golden lesson re-specced to mark-scoped |
-| **W1** | Stage core | Engine clock (single rAF); `useStage` (domain store); `useMark` (mark identity/handles); `useDirector` (mark-scoped, Motion-backed); `useSimulation`; boundary integration. **Rewrite the golden lesson to the mark-scoped shape** as the acceptance test | new `sandbox/stage/` (clock, store, mark, director, sim), wire in `sandbox/runtime.tsx`, `sdk/examples/newton.lesson.tsx` | The golden lesson's three drivers work end-to-end; interaction `dir.reset()` cancels cleanly; reduced-motion respected |
-| **W2** | Substrate (Mafs) | Wrap **Mafs** behind our `Plot.*` names (`OfX`/`Point`/`MovablePoint`/`Segment`/`Polygon`) + a `mark` handle prop + `constrain` axis-lock; `<Custom>` freeform hatch exposing coord transforms. Resolve React-19 peer/compat | `sandbox/stage/scene.tsx`, `scripts/build-sandbox.mjs` (Mafs dep) | Golden marks render via Mafs, are animatable by mark-handle, and drag wired to the store |
-| **W3** | Director interpolation (Motion) | **Motion**-backed beats: `drawTo` (SVG `pathLength`), `transformTo`, `fadeTo`, plus `sequence`/`stagger`/`parallel`/`wait`/`call` and `reset()`, all over the engine clock | `sandbox/stage/director.tsx`, `scripts/build-sandbox.mjs` (Motion dep) | The animated Newton step (`drawTo` vertical → `drawTo` tangent → `transformTo` marker) plays and resets on drag; **bundle size measured** |
-| **W4** | Simulation kernel | RK4 fixed-step integrator; seeded RNG (mulberry32); `useSimulation` wired to the clock; one demo sim (pendulum/orbit) | `sandbox/stage/sim.ts`, `sandbox/stage/rng.ts` | A stepper evolves state each frame decoupled from render; deterministic under a fixed seed |
-| **W5** | Pipeline & sandbox glue | Retire the allow-list gate in the verifier (keep CAS + soft checks); rewrite BUILD prompt for std-lib + freeform + Stage; bundle new deps; swap the few-shot to W0's golden lesson | `app/api/generate/verify.ts`, `prompts/build.ts`, `scripts/build-sandbox.mjs`, `sandbox/sdk.tsx` `buildScope()` | A live generation authors against the new std-lib and mounts; no false allow-list rejections |
-| **W6** | Eval / harness update | Repoint the drift gate: `sdk.d.ts` ⟺ runtime *scope coverage* (documentation), not allow-list; keep compile/runtime/CAS gates | `scripts/eval.mjs`, `scripts/harness.ts`, `sdk/surface.ts` | `npm run eval` green under the new model; asserts std-lib is documented & in scope |
+| **W1** ✅ | Stage core | Engine clock (single rAF); `useStage` (domain store); `useMark` (mark identity/handles); `useDirector` (mark-scoped, Motion-backed); `useSimulation`; boundary integration. **Rewrite the golden lesson to the mark-scoped shape** as the acceptance test | new `sandbox/stage/` (clock, store, mark, director, sim), wire in `sandbox/runtime.tsx`, `sdk/examples/newton.lesson.tsx` | **DONE** — golden lesson's three drivers work end-to-end in the browser; `dir.reset()` cancels cleanly (incl. from *inside* a running sequence); reduced motion lands beats instantly on their final state |
+| **W2** ✅ | Substrate (Mafs) | Wrap **Mafs** behind our `Plot.*` names (`OfX`/`Point`/`MovablePoint`/`Segment`/`Polygon`) + a `mark` handle prop + `constrain` axis-lock; `<Custom>` freeform hatch exposing coord transforms. Resolve React-19 peer/compat | `sandbox/stage/scene.tsx`, `scripts/build-sandbox.mjs` (Mafs dep) | **DONE** — Mafs wrapped behind `Plot.*`; marks animate by handle; drag wired to the store. React 19 clean, no shim |
+| **W3** ✅ | Director interpolation (Motion) | **Motion**-backed beats: `drawTo` (SVG `pathLength`), `transformTo`, `fadeTo`, plus `sequence`/`stagger`/`parallel`/`wait`/`call` and `reset()`, all over the engine clock | `sandbox/stage/director.tsx`, `scripts/build-sandbox.mjs` (Motion dep) | **DONE** — the animated Newton step plays and resets on drag; 0 React renders during a tween (60.1 ticks/s). Bundle +3.0% raw / +44 kB gz |
+| **W4** ✅ | Simulation kernel | RK4 fixed-step integrator; seeded RNG (mulberry32); `useSimulation` wired to the clock; one demo sim (pendulum/orbit) | `sandbox/stage/sim.ts`, `sandbox/stage/rng.ts` | **DONE** — `{rate:1.6}` measures 1.604 steps/s and halts on `null`; RK4 error 1.4e-7; seeded RNG reproducible |
+| **W5** ✅ | Pipeline & sandbox glue | Retire the allow-list gate in the verifier (keep CAS + soft checks); rewrite BUILD prompt for std-lib + freeform + Stage; bundle new deps; swap the few-shot to W0's golden lesson | `app/api/generate/verify.ts`, `prompts/build.ts`, `scripts/build-sandbox.mjs`, `sandbox/sdk.tsx` `buildScope()` | **DONE** — no false allow-list rejections (a freeform fixture passes with zero findings); prompt teaches the Stage; few-shot is the golden lesson, drift-gated |
+| **W6** ✅ | Eval / harness update | Repoint the drift gate: `sdk.d.ts` ⟺ runtime *scope coverage* (documentation), not allow-list; keep compile/runtime/CAS gates | `scripts/eval.mjs`, `scripts/harness.ts`, `sdk/surface.ts` | **DONE** — `npm run eval` green: 6/6 documentation checks, 9/9 fixtures |
 
 ### Sequencing / critical path
 
@@ -120,35 +131,39 @@ W0 ─▶ W1 ─┬─▶ W2 ─┐
 W0 unblocks everything. W1 (Stage core) is the spine; W2/W3/W4 layer on it in
 parallel. W5 integrates the runtime into the authoring pipeline; W6 re-greens eval.
 
-### W1 — in progress (the active workstream)
-
-**Done:** the mark-scoped API is locked (`DECISION.md` § UPDATE) and re-specced as
-the golden lesson; `mafs@0.21` (peers `react >=18` — fine on 19; ships
-`core.css`/`font.css` to copy) and `motion@12` are installed.
-
-**Remaining — the runtime itself**, built solo in this layout:
+### W1–W6 — as built
 
 ```
 sandbox/stage/
-  clock.ts     — single rAF clock (successor to useTime); reduced-motion aware
-  store.ts     — useStage: domain reactive store
-  mark.ts      — useMark: handle of Motion values (pathLength, x/y, opacity)
+  clock.ts     — single rAF clock; dt clamped to 1/20 s; sleeps on hidden tab;
+                 stops entirely at zero subscribers
+  store.ts     — useStage: s.field reads/subscribes, s.set() merges,
+                 s.get() is the snapshot that defuses stale closures
+  mark.ts      — useMark: handle of Motion values (pathLength, x/y, opacity).
+                 attach(el) binds reveal+opacity; POSITION is bound by the scene
   director.ts  — useDirector: drawTo/transformTo/fadeTo + sequence/parallel/
                  stagger/wait/call + reset(); Motion-backed
-  sim.ts       — useSimulation: fixed-rate/continuous stepper on the clock
-  scene.tsx    — Plot.* wrappers over Mafs + the `mark` prop + <Custom>
+  sim.ts       — useSimulation ({rate} discrete | {dt} continuous) + rk4()
+  rng.ts       — seeded mulberry32, for reproducible "randomness"
+  scene.tsx    — Plot.* over Mafs + the `mark` prop + <Custom>
 ```
 
-then wire into `buildScope()` (`sandbox/sdk.tsx`) and copy Mafs CSS in
-`scripts/build-sandbox.mjs`.
+**The hybrid was validated first** (`docs/spikes/w1-hybrid/`) and it holds: Mafs
+owns the static/interactive layer; director-animated marks render in *our own
+pixel-space layer* as a direct child of `<Mafs>`, driven straight off Motion
+values. Measured: 0 React renders during a 1.6 s tween at 60.1 ticks/s.
 
-**First technical call to validate.** Mafs renders declaratively, but
-`drawTo`/`transformTo` need per-frame animation. Use a **hybrid**: Mafs owns the
-static/interactive layer (grid, `OfX`, draggable `MovablePoint`); director-animated
-marks (`Segment` draw-on, the moving `Point`) render in our own thin SVG layer
-driven directly by Motion values (the `<Custom>` mechanism, generalized). That
-keeps Motion on its fast path and avoids per-frame React churn through Mafs — prove
-it with the vertical+tangent reveal before building the rest.
+**Two constraints that are easy to re-break** (both cost real debugging):
+- `vector-effect: non-scaling-stroke` **silently destroys** a `pathLength`
+  reveal — Chrome computes the dash in screen space, so a draw-on degrades into
+  a permanently dotted line. Mafs styles its own curves that way, which is
+  exactly why our draw-on marks are not in a `--mafs-view-transform` group.
+- `.MafsView path { stroke: var(--mafs-fg) }` is stripped from `core.css` at
+  copy time: a CSS rule outranks a *presentation attribute*, so it overrode
+  `stroke="none"`/`stroke="…"` on every `<Custom>` path.
+
+**Acceptance:** `npm run test:browser -- --path /dev --steps scripts/steps/golden.json`
+(21 steps) drives the golden lesson with no LLM in the loop.
 
 ---
 
@@ -233,30 +248,25 @@ Freedom-first means visual quality is un-gated until here; this closes it.
 
 ---
 
-## 8 · Next steps — the W1 runtime build, in order
+## 8 · Next steps
 
-1. **Spike the Mafs + Motion hybrid.** Render one `Segment` whose `pathLength`
-   animates via Motion in our own SVG layer, inside a Mafs coordinate plane. This
-   settles the single real unknown before anything else is built on it.
-2. **`clock.ts` + `store.ts`** — the one rAF clock (reduced-motion aware) and
-   `useStage`.
-3. **`mark.ts` + `director.ts`** — `useMark` handles, then Motion-backed
-   `drawTo`/`transformTo`/`fadeTo` plus `sequence`/`parallel`/`stagger`/`wait`/
-   `call` and `reset()`.
-4. **`sim.ts`** — `useSimulation` (discrete `rate` now; continuous `dt`/RK4 lands
-   with W4).
-5. **`scene.tsx`** — `Plot.*` wrappers over Mafs (`OfX`/`Point`/`MovablePoint`/
-   `Segment`/`Polygon`), the `mark` prop, `<Custom>`, and a `constrain` axis-lock.
-6. **Wire + assets** — inject the new names in `buildScope()`; bundle Mafs/Motion
-   and copy `mafs/core.css` in `scripts/build-sandbox.mjs`; **measure the bundle**.
-7. **Green the acceptance test** — golden `newton.lesson.tsx` mounts and all three
-   drivers work (drag, animated step, running iteration).
+W0–W6 are **done**; the runtime half of Phase 2 is closed. What remains is the
+half the runtime can't prove about itself.
 
-**Then Phase 2 continues:** W5 (retire the allow-list in `verify.ts`, rewrite the
-BUILD prompt to the Stage/freeform model, swap in the golden few-shot) and W6
-(repoint the eval drift gate to std-lib *documentation*, not an allow-list).
+1. **The live-generation demo target (the actual Phase-2 done-when).** The golden
+   lesson is *hand-written*, so it proves the runtime, not the engine. The open
+   question is whether the rewritten BUILD prompt gets the model to compose the
+   Stage — reach for `useMark`/`drawTo`, wire a `useSimulation`, use `<Custom>` —
+   rather than regressing to a static plot with a slider. Generate across several
+   concept shapes, mount each, drive it in the browser, and judge the frames.
+2. **Fix what that run exposes.** Expect the highest-leverage fixes to be in
+   `prompts/build.ts` rather than the runtime; treat a capability the model keeps
+   failing to reach for as a *documentation* bug in the prompt.
+3. **Then Phase 3** (director depth, vocabulary breadth, more substrates) and
+   **Phase 4** (the R6 vision-eval gate, which is what finally closes the
+   un-gated-visual-quality window the pivot deliberately opened).
 
-**Definition of done for W1:** the golden lesson runs end-to-end in the sandbox —
-drag repositions the tangent, "Play one step" reveals vertical → tangent → slides
-the marker, "Run" iterates to the root, and a drag mid-animation cancels cleanly
-via `dir.reset()`.
+**Standing regression suite:** `npm run eval` (6/6 documentation checks, 9/9
+verifier fixtures) plus the browser acceptance test above. The freeform fixture
+in the battery is the one that guards the pivot — it asserts that a lesson using
+custom helpers, randomness and `<Custom>` produces *zero* findings.
