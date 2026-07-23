@@ -1,0 +1,19 @@
+:root {
+  --paper: #f3f4f7;
+  --surface: #ffffff;
+  --ink: #14171d;
+  --ink-soft: #4a515e;
+  --line: #dde1e9;
+  --accent: #2f6df0;
+  --coral: #e0554d;
+  --green: #2ca05a;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button { font: inherit; }
