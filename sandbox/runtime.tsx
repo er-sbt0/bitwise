@@ -8,7 +8,7 @@ import { createRoot, Root } from "react-dom/client";
 import * as Babel from "@babel/standalone";
 import { buildScope, setEmit } from "./sdk";
 
-type InMsg = { type: "render"; id: string; code: string };
+type InMsg = { type: "render"; id: string; code: string } | { type: "ping" };
 
 const post = (msg: unknown) => parent.postMessage(msg, "*");
 
@@ -99,7 +99,12 @@ function render(id: string, code: string) {
 
 window.addEventListener("message", (ev: MessageEvent<InMsg>) => {
   const data = ev.data;
-  if (data && data.type === "render") render(data.id, data.code);
+  if (!data) return;
+  if (data.type === "render") render(data.id, data.code);
+  // The `ready` below is posted once, on boot — which can land BEFORE the parent
+  // page has hydrated and attached its listener, leaving the parent waiting
+  // forever. `ping` lets a late parent ask again instead of polling.
+  if (data.type === "ping") post({ type: "ready" });
 });
 
 // Catch async errors that escape the boundary (e.g. inside event handlers).

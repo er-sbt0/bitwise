@@ -160,6 +160,9 @@ export default function Page() {
             src="/sandbox.html"
             sandbox="allow-scripts"
             title="Lesson sandbox"
+            // The frame's own `ready` can fire before this page hydrates; asking
+            // again on load closes that race without polling.
+            onLoad={() => iframeRef.current?.contentWindow?.postMessage({ type: "ping" }, "*")}
             style={{ width: "100%", height: 560, border: "none", background: "#fff" }}
           />
         </div>
