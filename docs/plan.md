@@ -90,7 +90,7 @@ self-repairing on error.
 
 | ID | Workstream | Key tasks | Files | Done when |
 |----|-----------|-----------|-------|-----------|
-| **W0** | Design spike + reference lesson | Prototype 2–3 API shapes; pick one; hand-author a golden lesson exercising animate+interact+simulate | new `sdk/examples/*.lesson.tsx`, `docs/plan.md` update | A hand-written lesson runs on a throwaway Stage; API shape chosen & documented |
+| **W0** ✅ | Design spike + reference lesson | Prototyped 3 API shapes (hooks-imperative / declarative / scene-fn); **chose declarative-render + imperative-director with director-owned animation channels** | `docs/spikes/w0/` (3 variants + `DECISION.md`), golden `sdk/examples/newton.lesson.tsx` | **DONE** — shape chosen & documented; golden lesson written (runs once W1 exists) |
 | **W1** | Stage core | Engine clock (single rAF); reactive store; driver plumbing; spring/tween interp; boundary integration | new `sandbox/stage/` (clock, store, director, interp), wire in `sandbox/runtime.tsx` | Store updates from all 3 driver kinds re-render a pure `render(state)`; reduced-motion respected |
 | **W2** | Substrate + marks (SVG) | `Scene` + marks (curve, point, movable, segment/vector, label); `<Custom>` freeform escape hatch exposing coordinate transforms; **decide Mafs-adopt vs extend in-house SVG** | `sandbox/stage/scene.tsx`, extends `sandbox/sdk.tsx` Plot | A scene renders marks + a custom freeform path in figure coords; drag wired to store |
 | **W3** | Motion / director | Adopt **Motion** or **react-spring** as the interp primitive; thin sequencer (`play` / `sequence` / `stagger`) over the clock | `sandbox/stage/director.tsx`, `scripts/build-sandbox.mjs` (dep) | `dir.play(tweenTo(...))` animates a store value with easing; `sequence` chains beats |
@@ -188,6 +188,10 @@ Freedom-first means visual quality is un-gated until here; this closes it.
 ---
 
 ### Immediate next action
-Start **W0**: prototype the Stage authoring API and hand-write the golden lesson
-(animate + interact + simulate). That artifact is simultaneously the API decision,
-the pipeline few-shot, and the Phase-2 acceptance target.
+**W0 is done** (see `docs/spikes/w0/DECISION.md`; golden lesson at
+`sdk/examples/newton.lesson.tsx`). Next is **W1 — Stage core**: implement
+`useStage` (domain state) + `useDirector` (owns animation channels + the clock
+timeline: `play`/`sequence`/`stagger`/`tween`/`call`) + `useSimulation` (stepper),
+with a pure render over `<Plot>`/marks — targeting the golden lesson as its
+acceptance test. New marks it needs: `Plot.Segment` and a `constrain` axis-lock on
+`Plot.MovablePoint`.
