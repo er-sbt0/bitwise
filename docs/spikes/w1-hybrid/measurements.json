@@ -1,0 +1,474 @@
+{
+  "consoleMsgs": [],
+  "shots": {
+    "1-initial": {
+      "renders": {
+        "App": 1,
+        "PixelLayer": 1,
+        "MathLayer": 1,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 0,
+        "slide": 0,
+        "drawMath": 0
+      },
+      "values": {},
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "0 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "-237.714272",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "-237.714272",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "0 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [1.60, -0.70]"
+    },
+    "2-mid": {
+      "renders": {
+        "App": 1,
+        "PixelLayer": 1,
+        "MathLayer": 1,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 43,
+        "slide": 43,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 0.40565701652667485,
+        "slideX": -0.6849264975346161
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "0.40565701652667485 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "-50.880251167172204",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "-50.880251167172204",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "0.40565701652667485 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [1.60, -0.70]"
+    },
+    "3-final": {
+      "renders": {
+        "App": 1,
+        "PixelLayer": 1,
+        "MathLayer": 1,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 96,
+        "slide": 96,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 1,
+        "slideX": 3
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "222.85712999999998",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "222.85712999999998",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [1.60, -0.70]"
+    },
+    "4-after-drag": {
+      "renders": {
+        "App": 13,
+        "PixelLayer": 14,
+        "MathLayer": 13,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 96,
+        "slide": 96,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 1,
+        "slideX": 3
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "222.85712999999998",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "222.85712999999998",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [-0.28, -0.17]"
+    },
+    "5-replay-mid": {
+      "renders": {
+        "App": 13,
+        "PixelLayer": 14,
+        "MathLayer": 13,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 38,
+        "slide": 38,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 0.30648819557973184,
+        "slideX": -1.2997731874056628
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "0.30648819557973184 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "-96.55457406539271",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "-96.55457406539271",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "0.30648819557973184 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [-0.28, -0.17]"
+    },
+    "6-reset": {
+      "renders": {
+        "App": 13,
+        "PixelLayer": 14,
+        "MathLayer": 13,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 41,
+        "slide": 41,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 0,
+        "slideX": -3.2
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-237.714272",
+        "y1": "170.85713299999998",
+        "x2": "237.714272",
+        "y2": "-155.999991",
+        "pathLength": "1",
+        "stroke-dasharray": "0 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "-237.714272",
+        "cy": "-189.42856049999997",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "-237.714272",
+        "cy": "-159.71427649999998",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "0 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-360 -260 720 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(74.28571, 0, 0, -74.28571, 0, 0)",
+      "ptLabel": "draggable point: [-0.28, -0.17]"
+    },
+    "7-resized-mid": {
+      "renders": {
+        "App": 14,
+        "PixelLayer": 16,
+        "MathLayer": 14,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 53,
+        "slide": 53,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 0.5878494544595014,
+        "slideX": 0.4446666176489087
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-208",
+        "y1": "149.5",
+        "x2": "208",
+        "y2": "-136.5",
+        "pathLength": "1",
+        "stroke-dasharray": "0.5878494544595014 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "28.903330147179066",
+        "cy": "-165.75",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "28.903330147179066",
+        "cy": "-139.75",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "0.5878494544595014 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-260 -260 520 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(65, 0, 0, -65, 0, 0)",
+      "ptLabel": "draggable point: [-0.28, -0.17]"
+    },
+    "8-resized-final": {
+      "renders": {
+        "App": 14,
+        "PixelLayer": 16,
+        "MathLayer": 14,
+        "Stats": 0
+      },
+      "ticks": {
+        "draw": 97,
+        "slide": 97,
+        "drawMath": 0
+      },
+      "values": {
+        "draw": 1,
+        "slideX": 3
+      },
+      "errors": [],
+      "L1_line": {
+        "x1": "-208",
+        "y1": "149.5",
+        "x2": "208",
+        "y2": "-136.5",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0",
+        "style": null
+      },
+      "L2_motionCircle": {
+        "cx": "195",
+        "cy": "-165.75",
+        "fill": "var(--mafs-orange)"
+      },
+      "L3_manualCircle": {
+        "cx": "195",
+        "cy": "-139.75",
+        "fill": "var(--mafs-green)"
+      },
+      "L4_mathLineNSS": {
+        "x1": "-3.2",
+        "y1": "-2.8",
+        "x2": "3.2",
+        "y2": "-2.8",
+        "pathLength": "1",
+        "stroke-dasharray": "1 1",
+        "stroke-dashoffset": "0"
+      },
+      "svgViewBox": "-260 -260 520 520",
+      "svgChildTags": [
+        "g",
+        "path",
+        "g",
+        "path",
+        "path",
+        "g[pixel-space]",
+        "g[math-space]"
+      ],
+      "viewTransformCss": "matrix(65, 0, 0, -65, 0, 0)",
+      "ptLabel": "draggable point: [-0.28, -0.17]"
+    }
+  }
+}

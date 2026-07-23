@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>W1 spike — Mafs + Motion hybrid</title>
+    <link rel="stylesheet" href="./core.css" />
+    <style>
+      body {
+        margin: 0;
+        padding: 16px;
+        background: #0b0e14;
+        color: #e6e6e6;
+        font: 14px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      .bar {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      button {
+        font: inherit;
+        padding: 6px 14px;
+        background: #1d2433;
+        color: #e6e6e6;
+        border: 1px solid #39435c;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      .MafsView {
+        border: 1px solid #39435c;
+      }
+      #stats {
+        margin-top: 10px;
+        padding: 8px 10px;
+        background: #12161f;
+        border: 1px solid #39435c;
+        border-radius: 4px;
+        white-space: pre;
+        font-size: 12px;
+      }
+      .legend {
+        margin-top: 8px;
+        font-size: 12px;
+        color: #9aa4b8;
+      }
+      .legend b { font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <div class="legend">
+      <b style="color: #58a6ff">blue segment</b> = L1 pixel-space motion.line pathLength &middot;
+      <b style="color: #f14e0e">orange dot</b> = L2 motion.circle via useTransform &middot;
+      <b style="color: #15e272">green dot</b> = L3 manual .on("change") &rarr; setAttribute &middot;
+      <b style="color: #ae58ff">violet line</b> = L4 math-space group + non-scaling-stroke &middot;
+      <b style="color: #ee00ab">pink line</b> = L4 math-space group + math-unit stroke &middot;
+      <b style="color: #f11d0e">red sine</b> = L5 Mafs Plot.OfX draw-on, Mafs default styling &middot;
+      <b style="color: #7c58ff">indigo sine</b> = L5 Mafs Plot.OfX draw-on, vector-effect override
+    </div>
+    <script src="./spike.js"></script>
+  </body>
+</html>
