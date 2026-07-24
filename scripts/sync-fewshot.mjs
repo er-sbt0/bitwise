@@ -14,7 +14,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
 const root = process.cwd();
-const LESSON = join(root, "sdk/examples/newton.lesson.tsx");
+const LESSON = join(root, "sdk/examples/bayes.lesson.tsx");
 const BUILD = join(root, "app/api/generate/prompts/build.ts");
 
 const OPEN = "const FEWSHOT = `";

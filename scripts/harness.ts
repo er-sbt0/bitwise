@@ -380,13 +380,13 @@ function runDocGate(): { failed: number; total: number } {
   // prompt teaches an API the runtime no longer has — and the drift is silent,
   // because both files still compile. (Found the hard way: a `\*` that KaTeX
   // renders as a red error survived in both copies.)
-  const goldenBody = readFileSync(join(process.cwd(), "sdk/examples/newton.lesson.tsx"), "utf8")
+  const goldenBody = readFileSync(join(process.cwd(), "sdk/examples/bayes.lesson.tsx"), "utf8")
     .replace(/^\/\*[\s\S]*?\*\/\s*/, "")
     .trimEnd();
   check("few-shot is the golden lesson, verbatim", [
     ...(buildPrompt(MOCK_PLAN).includes(goldenBody)
       ? []
-      : ["prompts/build.ts FEWSHOT has drifted from sdk/examples/newton.lesson.tsx — run: node scripts/sync-fewshot.mjs"]),
+      : ["prompts/build.ts FEWSHOT has drifted from sdk/examples/bayes.lesson.tsx — run: node scripts/sync-fewshot.mjs"]),
   ]);
 
   // The same truthfulness question asked of the ONE lesson the model imitates:

@@ -40,6 +40,12 @@ WHO OWNS A MARK'S POSITION — the one rule that stops animation and interaction
   · HANDLE-BOUND marks carry their position on a useMark handle and are moved by transformTo. Presentation state therefore never pollutes the domain store.
   · Every interaction handler calls \`dir.reset()\` ONCE. That cancels in-flight motion and snaps reveals back, so a drag mid-animation can never leave a half-drawn figure. You never enumerate what to reset.
 
+THE DEFAULT SHAPE — a Deck of Screens, one idea per screen
+A taught lesson is a \`<Deck>\` of \`<Screen>\`s, not one long scroll. Each beat of the plan's \`develop[]\` becomes its OWN \`<Screen>\`: a title, a SHORT bit of prose, and the interactive figure as the star of that screen. The learner taps through them (the deck owns the navigation — a slider inside a screen never doubles as "next"). Prose shrinks; the figure carries the idea. A single \`<Section>\` is still fine for a simple one-surface lesson, but reach for the deck whenever you are teaching a sequence.
+
+CONCRETE PICTURES, NOT ALWAYS A PLOT
+Reach for a bespoke \`<Scene>\` — a pixel grid, tokens, shapes, arrows, brackets — whenever the concept is about counts, sets, groupings, geometry, structure, or a process. A \`<Scene>\` is a blank canvas: you draw the idea's actual picture, not its graph. Use \`<Plot>\` (Cartesian axes) ONLY when the concept genuinely IS a function or a curve. Do NOT default to a plot — most ideas are not curves.
+
 THE STANDARD LIBRARY (in scope as globals — compose it, and write your own code around it)
 Stage & state:
   const s = useStage({ x0: -1.5, iters: [] })    // DOMAIN state: what the lesson is *about*
@@ -57,18 +63,32 @@ Marks & direction:
     dir.play(beat)   // Promise<void>, runs on the engine clock
     dir.playing      // boolean — disable the play button with it
     dir.reset()      // cancel in-flight motion; reveals back to 0
-  Beats — opts = { duration?, ease?: "linear"|"easeIn"|"easeOut"|"easeInOut", delay? }:
-    drawTo(mark, opts?)                     // reveal a drawable mark, pathLength 0 -> 1
-    transformTo(mark, { x, y }, opts?)      // move a handle-bound mark
-    fadeTo(mark, opacity, opts?)
+  Beats — opts = { duration?, ease?: "linear"|"easeIn"|"easeOut"|"easeInOut", delay?, spring? }:
+    drawTo(mark, opts?)                     // reveal a drawable mark, pathLength 0 -> 1 (timed unless you pass spring)
+    transformTo(mark, { x, y }, opts?)      // move a handle-bound mark — springs by DEFAULT (a natural physical settle)
+    fadeTo(mark, opacity, opts?)            // timed unless you pass spring
     call(fn)                                // zero-duration — this is where you COMMIT to the store
     sequence(beats) | parallel(beats) | stagger(beats, { each }) | wait(seconds)
+    spring: true | "gentle" | "snappy" | "bouncy"  // on ANY beat: a self-timed physics settle — don't also pass duration/ease
 Emulation:
   const sim = useSimulation(s, (state, dt) => patch, { rate: 1.6 })   // { rate } = discrete steps/sec
   //   ... or { dt: 0.02 } for continuous integration, decoupled from the frame rate
   //   step is PURE: return a patch to merge, or null to HALT (converged / long enough).
   sim.start() / sim.stop() / sim.reset() / sim.running
-Figures — marks are CHILDREN of <Plot>, and any mark accepts mark={handle}:
+Figures — pick the surface the idea deserves; marks/atoms are CHILDREN, and any of them accepts mark={handle}.
+  <Scene> — a blank bespoke-drawing canvas (no axes), for concrete pictures (default surface for counts/sets/geometry/structure). Coordinates are figure units, y-up (same as Plot); units stay square by default. Colors are palette names blue/coral/green/violet/orange/ink or neutrals like "line".
+  <Scene x={[0,10]} y={[0,10]} height={} preserveAspect background?>   // a blank bespoke-drawing canvas (no axes)
+    <Scene.Grid rows={} cols={} x?={} y?={} fill={(row,col,index)=>colorName} gap? radius?/>   // rows×cols cells; per-cell color; recolors smoothly
+    <Scene.Rect x={} y={} width={} height={} color? fillOpacity? radius? mark?/>
+    <Scene.Circle x={} y={} r={} color? fillOpacity? mark?/>
+    <Scene.Line x1={} y1={} x2={} y2={} color? strokeWidth? dashed? mark?/>
+    <Scene.Arrow from={[x,y]} to={[x,y]} color? mark?/>
+    <Scene.Bracket from={[x,y]} to={[x,y]} label? color? depth?/>
+    <Scene.Region points={[[x,y],...]} color? fillOpacity? mark?/>
+    <Scene.Label x={} y={} color? size? anchor?>{"text"}</Scene.Label>
+    <Custom draw={({xToPx,yToPx})=>…}/>   // works inside <Scene> too
+  </Scene>
+  <Plot> — Cartesian axes, ONLY when the concept genuinely IS a function/curve:
   <Plot x={[-3, 4]} y={[-6, 8]} height={360}>
     <Plot.OfX y={x => f(x)} color="blue"/>          // color: "blue"|"coral"|"green"|"violet"|"orange"|"ink"
     <Plot.Point x={} y={} color? label?/>
@@ -78,7 +98,9 @@ Figures — marks are CHILDREN of <Plot>, and any mark accepts mark={handle}:
     <Custom draw={({ xToPx, yToPx, pxToX, pxToY }) => <g>...</g>}/>
   </Plot>
 Prose & structure:
-  <Section title="...">...</Section>                  // lessons are a sequence of Sections
+  <Deck><Screen title="...">…one idea…</Screen><Screen title="...">…</Screen></Deck>   // THE DEFAULT SHAPE: one idea per screen, tapped through
+  <Screen title?>...</Screen>                          // a single full-attention screen inside a <Deck> (a figure + a little prose)
+  <Section title="...">...</Section>                  // one scrolling surface — for a simple single-idea lesson, not a taught sequence
   <Prose>{\`markdown string with $inline$ and $$block$$ LaTeX\`}</Prose>
   <Callout kind="note|tip|warning|key-idea" title?>...</Callout>   // use "key-idea" to state the essence
   <Steps><Step title?>...</Step><Step>...</Step></Steps>          // ordered derivation, revealed one beat at a time
@@ -117,7 +139,7 @@ DETERMINISM BOUNDARY
 
 LECTURE-FIRST RULES
 - Open by MOTIVATING — a tension or question, not a definition. Earn the idea.
-- DEVELOP the argument with <Steps>: one beat per <Step>, so reasoning unfolds line by line instead of dumping algebra.
+- DEVELOP the argument as SCREENS: each develop[] beat is its own <Screen> with one figure as the star. Within a screen, use <Steps> (one beat per <Step>) when a single derivation needs to unfold line by line instead of dumping algebra.
 - Include exactly one interaction that lets the learner *see why* the idea is true (a Slider or a MovablePoint driving the figure). It must be load-bearing: the figure and the prose visibly depend on it, and it illustrates the reasoning rather than testing recall.
 - Where the argument has a MOMENT — a construction being built, a step being taken — SCRIPT it with the director instead of describing it: a short sequence() the learner triggers with a button, with a call() that commits the result to the store.
 - REVEAL the essence explicitly, ideally in a <Callout kind="key-idea">.
@@ -129,247 +151,185 @@ LECTURE-FIRST RULES
 
 Write the lesson you would be proud to give as a lecture.`;
 
-// The golden reference lesson (sdk/examples/newton.lesson.tsx), verbatim minus
+// The golden reference lesson (sdk/examples/bayes.lesson.tsx), verbatim minus
 // its header comment. It is simultaneously the API contract, this few-shot, and
 // the runtime's acceptance test — so the example can never drift from what the
 // runtime actually does.
 const FEWSHOT = `export const meta: LessonMeta = {
-  concept: "newtons-method",
-  prerequisites: ["derivatives", "tangent-lines", "roots-of-equations"],
+  concept: "bayes-theorem",
+  prerequisites: ["conditional-probability", "percentages"],
   objectives: [
-    "Read a Newton step as: slide down the tangent to where it crosses the x-axis",
-    "Iterate x_{n+1} = x_n − f(x_n)/f'(x_n) and see fast convergence near a root",
-    "Recognize how a bad initial guess overshoots or flies off",
+    "Read Bayes' theorem as natural frequencies over 100 people, not algebra",
+    "See why a positive test for a rare condition is usually a false alarm",
+    "Compute P(sick | test +) = TP / (TP + FP) by counting people",
   ],
-  difficulty: 3,
+  difficulty: 2,
 }
 
 export default function Lesson() {
-  // f has one real root near x ≈ 1.77 and flat spots (f'=0 at x = ±√(2/3)) that
-  // fling bad guesses far — a good basin to explore. Arithmetic in JS only.
-  const f = (x: number) => x ** 3 - 2 * x - 2
-  const df = (x: number) => 3 * x ** 2 - 2
-  const stepFn = (x: number) => x - f(x) / df(x) // one Newton iterate
+  // Fixed, documented test characteristics.
+  //   se = sensitivity      = P(+ | sick)  — the test catches 90% of the sick.
+  //   fp = false-pos. rate  = P(+ | well)  — it wrongly flags 9% of the healthy.
+  // These are the classic screening numbers: at a 1% base rate they give the
+  // famous ≈10% posterior (nSick=1, TP=1, FP=9 → 1/10).
+  const se = 0.9
+  const fp = 0.09
 
-  // DOMAIN state — only what the lesson is *about*.
-  const s = useStage({ x0: -1.5, iter: -1.5, iters: [] as number[] })
+  // 100 people as INTEGER counts — natural frequencies, nothing to trust on faith.
+  const counts = (p: number) => {
+    const nSick = Math.round(p * 100)
+    const nWell = 100 - nSick
+    const TP = Math.round(nSick * se) //  sick, test +   (caught)
+    const FN = nSick - TP //              sick, test −   (missed)
+    const FP = Math.round(nWell * fp) //  well, test +   (false alarm)
+    const TN = nWell - FP //              well, test −   (all clear)
+    const pos = TP + FP //                everyone who sees a "+" result
+    const post = pos > 0 ? TP / pos : 0 // P(sick | +), guarded
+    return { nSick, nWell, TP, FN, FP, TN, pos, post }
+  }
 
-  // HANDLE-BOUND marks — the director animates these directly. Their motion never
-  // touches the domain store (that separation is what W0 friction #1 was about).
-  const vert = useMark() //             vertical (x0,0)→(x0,f(x0)) — draw-on
-  const tang = useMark() //             tangent line — draw-on
-  const marker = useMark({ x: -1.5 }) // the point that slides to xNext — transform
-
+  const s = useStage({ p: 0.08, dimmed: false })
   const dir = useDirector()
+  const scrim = useMark({ opacity: 0 }) // the screen-4 spotlight, sprung by fadeTo
 
-  // EMULATION — a discrete map stepped at a fixed rate off the engine clock.
-  // Returning null halts the sim (converged, or ran long enough).
-  const sim = useSimulation(
-    s,
-    (st) => {
-      const x = st.iter
-      if (Math.abs(f(x)) < 1e-9 || st.iters.length > 18) return null
-      const xn = stepFn(x)
-      return { iter: xn, iters: [...st.iters, xn] }
-    },
-    { rate: 1.6 },
+  const c = counts(s.p)
+
+  // Row-major colour blocks laid down in order [ TP | FN | FP | TN ], so the grid
+  // reads as four clean runs. \`index\` is 0..99, row 0 at the top.
+  const t1 = c.TP //           coral  ends here
+  const t2 = c.TP + c.FN //    violet ends here
+  const t3 = c.TP + c.FN + c.FP // orange ends here (rest is neutral TN)
+  const sickVsWell = (_r: number, _c: number, i: number) => (i < c.nSick ? "coral" : "line")
+  const fourWay = (_r: number, _c: number, i: number) =>
+    i < t1 ? "coral" : i < t2 ? "violet" : i < t3 ? "orange" : "line"
+
+  // A cell tests POSITIVE iff it is a true positive (coral) or false positive
+  // (orange) — the two blocks that are NOT contiguous, so we list the rest.
+  const isPositive = (i: number) => i < t1 || (i >= t2 && i < t3)
+  const negatives: number[] = []
+  for (let i = 0; i < 100; i++) if (!isPositive(i)) negatives.push(i)
+
+  // Toggle the spotlight: spring the scrim's opacity 0↔1 (a gentle physics settle).
+  const spotlight = () => {
+    const on = !s.dimmed
+    s.set({ dimmed: on })
+    dir.play(fadeTo(scrim, on ? 1 : 0, { spring: "gentle" }))
+  }
+
+  const legend: [string, string][] = [
+    ["coral", "sick · caught (+)"],
+    ["violet", "sick · missed (−)"],
+    ["orange", "well · false alarm (+)"],
+    ["line", "well · all clear (−)"],
+  ]
+
+  const rateSlider = (
+    <Slider value={s.p} onChange={(p) => s.set({ p })} min={0.01} max={0.5} step={0.01} label="rate" />
   )
 
-  // DIRECTION — one step, addressed at specific marks. Geometry stays declarative
-  // (the segments below read x0); the beats only reveal/move the marks.
-  const oneStep = (x: number) => {
-    const xn = stepFn(x)
-    return sequence([
-      call(() => {
-        s.set({ x0: x }) // reposition the (declarative) segment endpoints
-        dir.reset() //      pathLengths→0, cancel in-flight
-        marker.set({ x }) // stage the marker at the current guess
-      }),
-      drawTo(vert, { duration: 0.5, ease: "easeOut" }), //   rise to the curve
-      drawTo(tang, { duration: 0.6 }), //                    draw the tangent
-      transformTo(marker, { x: xn }, { duration: 0.7, ease: "easeInOut" }), // slide
-      call(() => s.set({ x0: xn })), //                      commit: crossing → next guess
-    ])
-  }
-
-  const playOne = () => dir.play(oneStep(s.x0))
-
-  // Guided four-step reveal: chain steps, recomputing x each beat (pure).
-  const playMany = () => {
-    let x = s.x0
-    const beats = []
-    for (let i = 0; i < 4; i++) {
-      beats.push(oneStep(x))
-      beats.push(wait(0.25))
-      x = stepFn(x)
-    }
-    dir.play(sequence(beats))
-  }
-
-  const onGuess = (x0: number) => {
-    s.set({ x0 })
-    dir.reset() // interaction cancels any in-flight animation cleanly
-  }
-
-  const runSim = () => {
-    s.set({ iter: s.x0, iters: [s.x0] }) // seed the iteration from the guess
-    sim.start()
-  }
-
-  // ---- geometry, read straight off state (pure) -----------------------------
-  const x0 = s.x0
-  const y0 = f(x0)
-  const xNext = stepFn(x0) // where the tangent meets y = 0
-  const root = 1.7692923542386314 // f(root) = 0, for the callout
-  const resid = s.iters.length ? f(s.iters[s.iters.length - 1]) : f(x0)
-
   return (
-    <>
-      <Section title="Newton's method — chase the tangent to a root">
-        <Prose>{\`We want to solve $f(x) = 0$ for
+    <Deck>
+      <Screen title="A positive test — should you panic?">
+        <Prose>{\`About **1 in 100** people have a certain condition. There is a test for it that is
+roughly **90% accurate**. You take it, and it comes back **positive**.
 
-$$f(x) = x^3 - 2x - 2.$$
+How likely is it that you *actually* have the condition?
 
-Guessing blindly is hopeless. **Newton's idea:** stand at a guess $x_n$, and
-instead of the curve, follow the **tangent line** — the curve's best straight-line
-stand-in. Slide down the tangent to where it crosses the $x$-axis, and let *that*
-crossing be your next guess. Repeat.\`}</Prose>
+Most people say "about 90%." Hold that thought. We are going to stop trusting the
+percentages and **count real people** instead — and the true answer is far smaller.\`}</Prose>
+      </Screen>
 
-        <Callout kind="key-idea" title="One step, in one sentence">
-          <Prose>{\`The tangent at $x_n$ crosses zero at
+      <Screen title="Start with 100 people">
+        <Prose>{\`Here are 100 people, one per cell. The condition's **base rate** — how common it is —
+decides how many are actually sick (coral). Drag it and watch the sick block grow and shrink.\`}</Prose>
 
-$$x_{n+1} = x_n - \\\\frac{f(x_n)}{f'(x_n)}.$$
+        <Scene x={[0, 10]} y={[0, 10]} height={340}>
+          <Scene.Grid rows={10} cols={10} fill={sickVsWell} gap={0.1} radius={0.12} />
+        </Scene>
 
-Drag the guess below, then press **Play one step** to watch a single tangent slide.\`}</Prose>
-        </Callout>
+        {rateSlider}
 
-        <Plot x={[-3, 4]} y={[-6, 8]} height={360}>
-          <Plot.OfX y={f} color="blue" />
+        <Prose>{\`At a base rate of $\${fmt(s.p * 100, 0)}\\\\%$, that is **\${fmt(c.nSick)} sick** and
+**\${fmt(c.nWell)} healthy** out of 100.\`}</Prose>
+      </Screen>
 
-          {/* FREEFORM: the tangent step's right triangle + an arrowhead at the
-              crossing — geometry the stock marks don't give us, in figure coords. */}
+      <Screen title="Now give everyone the test">
+        <Prose>{\`The test is not perfect. Of the sick it **catches \${fmt(se * 100, 0)}%** (coral) and misses
+the rest (violet). Of the healthy it wrongly **flags \${fmt(fp * 100, 0)}%** (orange); the rest come
+back clear (grey). Four groups — still exactly 100 people.\`}</Prose>
+
+        <Scene x={[0, 14.5]} y={[0, 10]} height={340}>
+          <Scene.Grid rows={10} cols={10} x={[0, 10]} y={[0, 10]} fill={fourWay} gap={0.1} radius={0.12} />
+          {legend.map(([color, text], k) => {
+            const y = 8.6 - k * 1.5
+            return (
+              <React.Fragment key={color}>
+                <Scene.Rect x={10.6} y={y} width={0.8} height={0.8} color={color} fillOpacity={1} radius={0.12} />
+                <Scene.Label x={11.7} y={y + 0.4} anchor="start" size={14}>{text}</Scene.Label>
+              </React.Fragment>
+            )
+          })}
+        </Scene>
+
+        {rateSlider}
+
+        <Prose>{\`Counting heads: **\${fmt(c.TP)} caught**, \${fmt(c.FN)} missed, **\${fmt(c.FP)} false alarms**,
+and \${fmt(c.TN)} cleared.\`}</Prose>
+      </Screen>
+
+      <Screen title="Who actually tested positive?">
+        <Prose>{\`A "+" result comes from **two** groups: the truly sick who were caught (coral) and the
+healthy who were falsely flagged (orange). Press the button to spotlight them — everyone who
+tested *negative* dims away.\`}</Prose>
+
+        <Scene x={[0, 10]} y={[0, 10]} height={340}>
+          <Scene.Grid rows={10} cols={10} x={[0, 10]} y={[0, 10]} fill={fourWay} gap={0.1} radius={0.12} />
           <Custom
-            draw={({ xToPx, yToPx }: any) => {
-              const A = [xToPx(x0), yToPx(0)]
-              const B = [xToPx(x0), yToPx(y0)]
-              const C = [xToPx(xNext), yToPx(0)]
-              const ang = Math.atan2(yToPx(0) - yToPx(y0), xToPx(xNext) - xToPx(x0))
-              return (
-                <g>
-                  <path
-                    d={\`M\${A[0]},\${A[1]} L\${B[0]},\${B[1]} L\${C[0]},\${C[1]} Z\`}
-                    fill="#7b5bd6"
-                    fillOpacity={0.12}
-                    stroke="none"
-                  />
-                  <path
-                    // Barbs sweep BACK from the tip: subtract a vector along the
-                    // direction of travel, splayed by ±0.4 rad. (A wide splay like
-                    // ±2.6 flips the sign of the cosine and throws them past C.)
-                    d={\`M\${C[0]},\${C[1]} L\${C[0] - 10 * Math.cos(ang + 0.4)},\${C[1] - 10 * Math.sin(ang + 0.4)} M\${C[0]},\${C[1]} L\${C[0] - 10 * Math.cos(ang - 0.4)},\${C[1] - 10 * Math.sin(ang - 0.4)}\`}
-                    stroke="#e08a2f"
-                    strokeWidth={2.5}
-                    fill="none"
-                  />
-                </g>
-              )
-            }}
+            draw={({ xToPx, yToPx }) => (
+              <g>
+                {negatives.map((i) => {
+                  const row = Math.floor(i / 10)
+                  const colIx = i % 10
+                  const x = xToPx(colIx + 0.05)
+                  const yTop = yToPx(10 - row - 0.05)
+                  const w = xToPx(colIx + 0.95) - x
+                  const h = yToPx(9 - row + 0.05) - yTop
+                  return (
+                    <rect key={i} x={x} y={yTop} width={w} height={h} rx={3} fill="#fcfdff" opacity={scrim.opacity * 0.82} />
+                  )
+                })}
+              </g>
+            )}
           />
+        </Scene>
 
-          {/* Draw-on marks: declarative geometry (endpoints read x0); the director
-              only reveals them via drawTo(pathLength). */}
-          <Plot.Segment mark={vert} x1={x0} y1={0} x2={x0} y2={y0} color="violet" dashed />
-          <Plot.Segment mark={tang} x1={x0} y1={y0} x2={xNext} y2={0} color="orange" strokeWidth={2.5} />
-          <Plot.Point x={x0} y={y0} color="orange" />
-
-          {/* Handle-bound marker: its x lives on the mark, moved by transformTo. */}
-          <Plot.Point mark={marker} y={0} color="green" label="x_{n+1}" />
-
-          {/* INTERACTION: drag the guess along the x-axis (state-bound, not scripted). */}
-          <Plot.MovablePoint x={x0} y={0} color="coral" constrain="horizontal" onMove={(p: any) => onGuess(p.x)} />
-        </Plot>
-
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0" }}>
-          <button onClick={playOne} disabled={dir.playing}>Play one step</button>
-          <button onClick={playMany} disabled={dir.playing}>Play four steps</button>
+        <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
+          <button onClick={spotlight}>{s.dimmed ? "Show everyone" : "Spotlight the positives"}</button>
         </div>
 
-        <Slider value={x0} onChange={onGuess} min={-3} max={4} step={0.01} label="x_0" />
+        {rateSlider}
 
-        <Callout kind="note" title="Where the tangent lands">
-          <Prose>{\`From $x_0 = \${fmt(x0)}$: the height is $f(x_0) = \${fmt(y0)}$ and the slope is
-$f'(x_0) = \${fmt(df(x0))}$, so the tangent crosses the axis at
-$x_1 = \${fmt(xNext)}$. The true root sits at $x^{*} \\\\approx \${fmt(root)}$.\`}</Prose>
+        <Callout kind="note" title="The count that decides it">
+          <Prose>{\`**\${fmt(c.pos)} people test positive**, but only **\${fmt(c.TP)} of them are truly sick**. So
+
+$$P(\\\\text{sick} \\\\mid +) = \\\\frac{\${fmt(c.TP)}}{\${fmt(c.TP)} + \${fmt(c.FP)}} = \${fmt(c.post * 100, 0)}\\\\%.$$
+
+At a base rate of $\${fmt(s.p * 100, 0)}\\\\%$, a positive result is **more often a false alarm than the real thing** — drag the rate up and watch that flip.\`}</Prose>
         </Callout>
-      </Section>
+      </Screen>
 
-      <Section title="Let it iterate">
-        <Prose>{\`Once one step works, the rest is just *doing it again*. Press **Run** to iterate
-$x_{n+1} = x_n - f(x_n)/f'(x_n)$ from wherever the guess sits — the same clock that
-drives the animation drives the iteration.\`}</Prose>
+      <Screen title="Why the paradox">
+        <Callout kind="key-idea" title="Rarity beats accuracy">
+          <Prose>{\`When a condition is **rare**, the handful of true positives is swamped by false positives
+drawn from the huge healthy majority. A \${fmt(se * 100, 0)}%-accurate test can still be wrong most
+of the time it shouts "positive" — not because the test is bad, but because there are so many
+more healthy people available to misflag.
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0" }}>
-          <button onClick={runSim} disabled={sim.running}>Run</button>
-          <button onClick={() => sim.stop()} disabled={!sim.running}>Pause</button>
-          <button onClick={() => { sim.reset(); s.set({ iters: [] }) }}>Reset</button>
-        </div>
-
-        {s.iters.length > 0 && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 16px", margin: "10px 0" }}>
-            {s.iters.map((xn, i) => (
-              <span key={i} style={{ fontFamily: "ui-monospace, monospace" }}>
-                <Math>{\`x_{\${i}} = \${fmt(xn, 5)}\`}</Math>
-              </span>
-            ))}
-          </div>
-        )}
-
-        <Callout kind={Math.abs(resid) < 1e-4 ? "tip" : "warning"} title="How close are we?">
-          <Prose>{\`The last iterate leaves a residual $|f(x_n)| = \${fmt(Math.abs(resid), 6)}$.
-Near the root each step roughly **doubles** the number of correct digits — but start
-past the flat spot at $x = \\\\pm\\\\sqrt{2/3} \\\\approx \${fmt(Math.sqrt(2 / 3))}$, where
-$f'(x_0)$ is tiny, and the very first tangent can fling the guess far away.\`}</Prose>
+The remedy is not a better test; it is to think in **natural frequencies**: out of 100 real
+people, how many with a positive result are actually sick? Count, and the panic dissolves.\`}</Prose>
         </Callout>
-      </Section>
-
-      <Section title="Check your understanding">
-        <Prose>{\`Try Newton's method by hand, using $f(x) = x^3 - 2x - 2$ and
-$f'(x) = 3x^2 - 2$.\`}</Prose>
-
-        <Exercise
-          prompt={<Prose>{\`Starting from $x_0 = 2$, compute the next iterate $x_1$.\`}</Prose>}
-          // f(2)=2, f'(2)=10 → x1 = 2 − 2/10 = 1.8. CAS-checked numerically.
-          answer={{ type: "numeric", value: 1.8, tolerance: 1e-6 }}
-          input="number"
-          solution={
-            <Steps>
-              <Step title="Evaluate">
-                <Prose>{\`$f(2) = 8 - 4 - 2 = 2$ and $f'(2) = 12 - 2 = 10$.\`}</Prose>
-              </Step>
-              <Step title="Step">
-                <Prose>{\`$x_1 = 2 - \\\\dfrac{2}{10} = 1.8$.\`}</Prose>
-              </Step>
-            </Steps>
-          }
-        >
-          <Hint>Plug into $x_1 = x_0 - f(x_0)/f'(x_0)$.</Hint>
-        </Exercise>
-
-        <MultipleChoice
-          prompt="Why can a guess near the flat spot f'(x)≈0 send Newton flying?"
-          correct={0}
-          shuffle
-          solution={
-            <Prose>{\`Dividing by a near-zero slope makes $f(x)/f'(x)$ enormous, so the
-tangent is nearly horizontal and crosses the axis very far away.\`}</Prose>
-          }
-        >
-          <Option>The step f(x)/f'(x) blows up when the slope is tiny</Option>
-          <Option>The function has no root there</Option>
-          <Option>The tangent line stops existing</Option>
-        </MultipleChoice>
-      </Section>
-    </>
+      </Screen>
+    </Deck>
   )
 }`;
 
@@ -383,7 +343,7 @@ function canonicalNote(plan: LessonPlan): string {
 }
 
 export function buildPrompt(plan: LessonPlan): string {
-  return `Here is the pedagogical plan to render, and a golden reference lesson showing the Stage in full — interaction, direction, emulation and freeform drawing in one figure. Match its craft and its shape, not its content.
+  return `Here is the pedagogical plan to render, and a golden reference lesson: a bespoke-scene deck — a recoloring pixel grid across tap-through screens, with a spring spotlight. Match its craft and its shape (a Deck of Screens built on a bespoke Scene), not its content.
 
 EXAMPLE LESSON:
 ${FEWSHOT}
