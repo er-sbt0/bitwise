@@ -12,6 +12,7 @@ import { useMark } from "./stage/mark";
 import { useDirector, drawTo, transformTo, fadeTo, call, sequence, parallel, stagger, wait } from "./stage/director";
 import { useSimulation } from "./stage/sim";
 import { Plot, Custom } from "./stage/scene";
+import { tokens } from "./stage/tokens";
 
 const math = create(all, {});
 
@@ -189,11 +190,13 @@ function Section({ title, children }: { title?: string; children: React.ReactNod
   );
 }
 
+// bg tints have no token yet (they are per-tone washes) — only the accent bars,
+// which are the plain brand hues, come from tokens.
 const CALLOUT_TONE: Record<string, { bg: string; bar: string; label: string }> = {
-  note: { bg: "#eef1f6", bar: "#8a93a3", label: "Note" },
-  tip: { bg: "#e9f6ee", bar: "#2ca05a", label: "Tip" },
-  warning: { bg: "#fdeeec", bar: "#e0554d", label: "Warning" },
-  "key-idea": { bg: "#eaf1fe", bar: "#2f6df0", label: "Key idea" },
+  note: { bg: "#eef1f6", bar: tokens.color.textMuted, label: "Note" },
+  tip: { bg: "#e9f6ee", bar: tokens.color.green, label: "Tip" },
+  warning: { bg: "#fdeeec", bar: tokens.color.coral, label: "Warning" },
+  "key-idea": { bg: "#eaf1fe", bar: tokens.color.blue, label: "Key idea" },
 };
 
 function Callout({
@@ -258,10 +261,10 @@ function Steps({ children }: { children: React.ReactNode }) {
         return (
           <div key={i} style={{ display: "flex", gap: 12 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div style={{ flex: "0 0 auto", width: 26, height: 26, borderRadius: "50%", background: "#2f6df0", color: "#fff", fontSize: ".8rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ flex: "0 0 auto", width: 26, height: 26, borderRadius: "50%", background: tokens.color.blue, color: "#fff", fontSize: ".8rem", fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>
                 {i + 1}
               </div>
-              {!last && <div style={{ width: 2, flex: 1, background: "#e3e6ec", margin: "4px 0" }} />}
+              {!last && <div style={{ width: 2, flex: 1, background: tokens.color.lineSoft, margin: "4px 0" }} />}
             </div>
             <div style={{ flex: 1, paddingBottom: last ? 0 : 12 }}>
               {title && <div style={{ fontWeight: 600, margin: "3px 0 4px" }}>{title}</div>}
@@ -340,11 +343,11 @@ function Exercise({ prompt, answer, input, solution, hints, onResult, children }
           placeholder={inputKind === "point" ? "(x, y)" : inputKind === "number" ? "number" : "answer"}
           style={{ ...inputStyle, minWidth: 130 }}
         />
-        <button onClick={submit} style={{ ...btnStyle, background: "#2f6df0", color: "#fff", borderColor: "#2f6df0", fontWeight: 600 }}>
+        <button onClick={submit} style={{ ...btnStyle, background: tokens.color.blue, color: "#fff", borderColor: tokens.color.blue, fontWeight: 600 }}>
           Check
         </button>
         {result && (
-          <span style={{ fontWeight: 600, color: result.correct ? "#2ca05a" : "#e0554d" }}>
+          <span style={{ fontWeight: 600, color: result.correct ? tokens.color.green : tokens.color.coral }}>
             {result.correct ? "Correct" : result.feedback ?? "Not quite"}
           </span>
         )}
@@ -399,7 +402,7 @@ function MultipleChoice({ prompt, correct, shuffle, solution, children }: any) {
         })}
       </div>
       {picked != null && (
-        <div style={{ marginTop: 8, fontWeight: 600, color: correctSet.has(picked) ? "#2ca05a" : "#e0554d" }}>
+        <div style={{ marginTop: 8, fontWeight: 600, color: correctSet.has(picked) ? tokens.color.green : tokens.color.coral }}>
           {correctSet.has(picked) ? "Correct" : "Try again"}
         </div>
       )}
@@ -459,32 +462,32 @@ function useTime({ paused }: { paused?: boolean } = {}): number {
 // values — changing one without the other is what makes a lesson look assembled.
 const btnStyle: React.CSSProperties = {
   padding: "7px 14px",
-  border: "1px solid #ccd3e0",
-  borderRadius: 8,
-  background: "linear-gradient(#fff, #f7f8fb)",
+  border: `1px solid ${tokens.color.lineStrong}`,
+  borderRadius: tokens.radius.sm,
+  background: `linear-gradient(#fff, ${tokens.color.surface})`,
   cursor: "pointer",
-  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  fontFamily: tokens.type.sans,
   fontSize: ".92rem",
   fontWeight: 550,
-  color: "#16191f",
+  color: tokens.color.text,
 };
 const inputStyle: React.CSSProperties = {
   padding: "7px 11px",
-  border: "1px solid #ccd3e0",
-  borderRadius: 8,
-  fontFamily: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif',
+  border: `1px solid ${tokens.color.lineStrong}`,
+  borderRadius: tokens.radius.sm,
+  fontFamily: tokens.type.sans,
   fontSize: ".95rem",
 };
 const cardStyle: React.CSSProperties = {
-  border: "1px solid #e4e7ee",
-  borderRadius: 12,
+  border: `1px solid ${tokens.color.line}`,
+  borderRadius: tokens.radius.md,
   padding: "16px 18px",
   margin: "20px 0",
-  background: "#fcfdff",
+  background: tokens.color.paper,
 };
 const rowStyle: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center", margin: "8px 0" };
-const labelStyle: React.CSSProperties = { fontFamily: "ui-monospace, monospace", minWidth: 24, color: "#2f6df0", fontWeight: 600 };
-const valStyle: React.CSSProperties = { fontFamily: "ui-monospace, monospace", minWidth: 44, textAlign: "right" };
+const labelStyle: React.CSSProperties = { fontFamily: tokens.type.mono, minWidth: 24, color: tokens.color.blue, fontWeight: 600 };
+const valStyle: React.CSSProperties = { fontFamily: tokens.type.mono, minWidth: 44, textAlign: "right" };
 
 // ---- the injected global scope ----------------------------------------------
 export function buildScope() {

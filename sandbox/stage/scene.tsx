@@ -22,17 +22,19 @@ import {
 } from "mafs";
 import type { MotionValue } from "motion/react";
 import { liveMarks, type Mark } from "./mark";
+import { tokens } from "./tokens";
 
 // ---- palette ----------------------------------------------------------------
-// Lives here rather than in sdk.tsx because the sdk imports the stage and never
-// the reverse; sdk.tsx re-exports nothing, it just stopped needing it.
+// The named figure hues, projected out of the engine's design tokens so a mark
+// and a scene-kit panel can never disagree on "blue". The COLORS/col names are
+// kept because other code binds to them; only their source moved.
 export const COLORS: Record<string, string> = {
-  blue: "#2f6df0",
-  coral: "#e0554d",
-  green: "#2ca05a",
-  violet: "#7b5bd6",
-  orange: "#e08a2f",
-  ink: "#14171d",
+  blue: tokens.color.blue,
+  coral: tokens.color.coral,
+  green: tokens.color.green,
+  violet: tokens.color.violet,
+  orange: tokens.color.orange,
+  ink: tokens.color.ink,
 };
 export const col = (c?: string) => COLORS[c ?? "blue"] ?? COLORS.blue;
 
