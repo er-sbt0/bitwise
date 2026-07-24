@@ -12,9 +12,21 @@ only durable thing we build.
 > included**: the Stage (clock, store, marks, director, simulation) runs in the
 > sandbox, the allow-list is retired, `npm run eval` is green, and three
 > unrehearsed concepts each came back as a lesson that composed the Stage
-> *unprompted* and mounted interactively in ~80–95s. The open question is no
-> longer "can it" but **Phase 3 (deepen) vs Phase 4 (stand up the vision-eval
-> gate)** — see the note under Phase 2. Steered by a
+> *unprompted* and mounted interactively in ~80–95s. It "can" — but it comes back
+> **narrow and plain**: every concept funnels into one Cartesian plot, craft is
+> flat, and the only hard gate is answer-correctness, so nothing pulls the *look*
+> upward. **Direction sharpened (2026-07-24): craft-first, gates off,
+> LLM-as-artist.** Phase 3 raises the *look and depth* by handing the model a
+> robust engine of programmatic building blocks it composes as the artist — and we
+> **drop the verification machinery** (the CAS answer-gate, the planned vision-eval,
+> the blocking critic) to spend that time on the engine instead. Quality is
+> **judged by eye**, not gated. *Risk accepted:* a wrong answer or a visual
+> regression can now reach the screen unflagged — we trust the model and our own
+> eyes for this horizon. The craft goals — **design tokens + spring motion,
+> Scene-kit breadth, director/animation depth, Deck/Screen shape** — are a menu we
+> pull from one at a time, not a batch; and **deep + complete now means
+> simulation-backed:** the star is a real running model the learner drives, not
+> more prose. Steered by a
 > **pivot (2026-07-23):** from a
 > *curated, verifier-gated widget set* to a **freeform creative runtime**. The
 > LLM composes a rich standard library — and writes custom draw/animate/simulate
@@ -31,10 +43,12 @@ only durable thing we build.
 - **The std-lib is a library, not a cage.** The SDK is a rich, typed standard
   library the LLM composes — and extends with custom code — freely. `sdk.d.ts`
   *documents* the surface; under the freeform pivot it no longer *gates* it.
-- **Answer-correctness is earned by machinery; visual craft is judged by output.**
-  The CAS stays the source of truth for graded answers, never the model. Visual
-  and interaction quality is gated by a render-and-inspect (vision) eval —
-  sequenced after the freeform slice — rather than by a static allow-list.
+- **Judged by eye, not by gates (this horizon).** The verification machinery is
+  off: the CAS answer-gate, the render-and-inspect vision eval, and the blocking
+  critic are retired so the time goes into the engine instead. The model is the
+  brain and the artist; we trust it and inspect the output ourselves. *(The CAS
+  code still lives in the tree — see M1 — and can be re-armed if we choose, but it
+  no longer blocks a mount.)*
 - **The wait is the product too.** A minutes-long generation should read as
   craft via visible pipeline progress. **Landed 2026-07-24**, earlier than
   planned and out of M2's scope, because a 90-second blank screen was actively
@@ -163,9 +177,9 @@ now, implement one substrate now.
   *(supersedes the former "locked" truthful-contract-as-cage)*
 - **R5 — load-bearing interactions.** The central interaction must matter; the
   critic (not a static gate) checks the lesson actually depends on it.
-- **R6 — render-and-inspect eval.** Screenshot + vision grading of the rendered
-  artifact becomes the primary visual-quality gate — **sequenced after** the
-  freeform slice, not before it.
+- **R6 — render-and-inspect eval. Parked (2026-07-24).** Screenshot + vision
+  grading was to be the primary visual-quality gate; under the gates-off direction
+  quality is judged by eye instead. Kept as a future option, not a blocker.
 
 **In scope (sequenced — vertical before horizontal)**
 - **Phase 1 — SSOT for the SDK surface. ✅ done, now repurposed.** `sdk.d.ts`
@@ -215,18 +229,59 @@ now, implement one substrate now.
   whether a name is approved, only whether it exists, so it costs the author no
   freedom. It also catches what mounting cannot: a bad name inside an `onClick`
   renders perfectly and explodes under the learner's cursor.
-- **Phase 3 — deepen & extend.** Richer director (transforms, morphing), broader
-  vocabulary, the ODE-kernel → physics-engine path, more substrates
-  (Canvas / WebGL / 3D).
-- **Phase 4 — stand up the R6 vision-eval gate** (freedom first, eval next).
+- **Phase 3 — brilliant-grade craft (freeform-first). NEXT (chosen 2026-07-24).**
+  Phase 2 proved the model *can* compose the Stage; it comes back narrow and plain
+  because the only few-shot is a Cartesian plot — so the model imitates
+  curve-on-axes and nothing rewards the *look*. Phase 3 changes **what the model
+  imitates** and **what the engine hands it**, along a menu of craft goals we pull
+  from **one at a time** (not a batch — each is a TODO in its own right):
+  - **Scene kit — breadth.** Promote `<Custom>` from a Plot escape-hatch to a
+    standalone **`<Scene>`** that owns its coordinate space and hands the author a
+    house-styled **drawing kit**: arrows, brackets, dot-grids, tokens/counters,
+    shaded regions, shapes, labels — low-level *atoms*, not typed charts. Bespoke
+    concrete pictures (a pixel grid, a lattice, rearranged squares), not another
+    chart type. **Replace the Newton plot few-shot** with non-plot bespoke-scene
+    few-shots — that example is the anchor keeping output narrow.
+  - **Deck / Screen — shape.** Stop shipping one scrolling component. A
+    **`<Deck>`/`<Screen>`** container: one idea per screen, tap-to-advance,
+    progress. The plan's `develop[]` beats *become* the screens; prose shrinks and
+    the manipulable figure becomes the star.
+  - **Design tokens + spring motion — craft.** A **tokens module** (palette, type
+    scale, spacing, radii, shadow, spring configs) consumed by BOTH the `Plot.*`
+    primitives and the scene kit, and **spring-based motion by default** (Motion is
+    already a dep) in place of linear draw-on tweens — so even a naive composition
+    inherits craft.
+  - **Director / animation depth — motion.** Richer cinematic transitions on top of
+    the mark-scoped director: morphing/interpolation between shapes, staged and
+    staggered reveals, camera/scale moves — so a figure *performs* rather than
+    snapping. (Pulled up from "fold in later"; still a standalone TODO.)
+  - **Simulation-backed depth — the model underneath.** Make `useSimulation` a
+    first-class star, not a golden-lesson-only feature: a real running model
+    (ODE/stepper now, physics later) the learner drives, since **deep + complete =
+    simulation-backed**. Give the prompt a simulation few-shot so live runs reach
+    for it unprompted (none has yet).
 
-> **Open decision: Phase 3 or Phase 4 next?** "Freedom first, eval next" put the
-> gate after the freeform slice, and the slice is now done — so Phase 4 is due on
-> its own terms. The argument for taking it before Phase 3: every defect above
-> was invisible to the eval battery and visible in a screenshot. Deepening the
-> director multiplies exactly that class of failure while we are still judging it
-> by eye. The argument for Phase 3 first is the usual one — a richer runtime
-> gives the eval more worth grading.
+  **First brick.** A thin vertical slice proving *breadth* on a concept that is
+  **not** curve-shaped: tokens → scene kit → spring director → deck, end-to-end, on
+  **Bayes' theorem as a 100-pixel grid** that recolors as you drag the base rate —
+  the sharpest contrast with the plot idiom. Then widen to more concepts.
+
+  The genuinely-later items (a **physics engine** — Rapier / matter.js — behind
+  `useSimulation`, and more **substrates** — Canvas / WebGL / 3D) **fold in after**
+  the craft baseline lands: they deepen a runtime that now looks the part, rather
+  than one that doesn't.
+- **Phase 4 — the R6 vision-eval gate. Parked (2026-07-24).** Deferred under the
+  gates-off direction; quality is judged by eye for this horizon. Revisit if
+  by-eye review stops scaling.
+
+> **Decision (2026-07-24): craft-first, gates off.** The user chose to spend the
+> engine's time on the *look and depth* and drop the verification machinery
+> entirely — including the CAS answer-gate — trusting the model (the brain/artist)
+> and judging by eye. **Risk accepted:** a wrong answer or a silent visual
+> regression can reach the screen unflagged. **Cheapest hedge if we want one
+> later:** a fixed set of ~6 canonical concepts, regenerated each iteration and
+> eyeballed as a screenshot grid — nearly free, and the natural on-ramp back to a
+> Phase-4 gate if by-eye review stops scaling.
 
 **Candidate stack.** Draw: **Mafs** (SVG) → **Observable Plot**,
 **react-three-fiber** later. Animate: **Motion** / **react-spring** + a timeline
@@ -271,6 +326,12 @@ error — even before the vision-eval gate lands.~~ **Met 2026-07-24** for
 animation + interaction + safe mount + repair; the *simulation-backed* half is
 proven by the golden lesson rather than by a live generation (no live run has yet
 reached for `useSimulation` on its own), so the bar is met but not saturated.
+
+**Done when (Phase 3):** an unrehearsed non-plot concept comes back as a *bespoke
+scene* (the right concrete picture, not a Cartesian plot), delivered as tap-through
+screens, with house-style craft and spring motion inherited from the engine, and —
+where the concept warrants — backed by a live simulation the learner drives;
+convincingly brilliant.org-grade *by eye* across the ~6-concept screenshot grid.
 
 **Not yet:** the curriculum loop (M2); the R6 vision-eval gate (Phase 4).
 
@@ -349,10 +410,10 @@ deferred non-goals come back on the table.
 
 - **Observability** — tracing from M0; cost/latency/failure dashboards grow with
   the pipeline.
-- **Eval harness** — starts M1, deepens every milestone; the main defense for a
-  system whose content is never hand-reviewed. Under the freeform pivot it grows a
-  **render-and-inspect (vision) gate** for visual/interaction/emulation craft
-  (Ma Phase 4), since a static allow-list no longer holds that line.
+- **Eval harness** — built through M1; **paused as a blocker (2026-07-24)** under
+  the gates-off direction. Quality is judged by eye for this horizon (optionally
+  via the ~6-concept screenshot grid). The render-and-inspect (vision) gate and the
+  CAS answer-gate remain in the tree as future options, not release blockers.
 - **Prompt & SDK iteration** — the two highest-leverage surfaces; expect
   constant tuning. `sdk.d.ts` stays the single source of truth for the runtime
   and prompt docs — as std-lib documentation; the enforced verifier allow-list is
