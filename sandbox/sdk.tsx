@@ -12,6 +12,7 @@ import { useMark } from "./stage/mark";
 import { useDirector, drawTo, transformTo, fadeTo, call, sequence, parallel, stagger, wait } from "./stage/director";
 import { useSimulation } from "./stage/sim";
 import { Plot, Scene, Custom } from "./stage/scene";
+import { Deck, Screen } from "./deck";
 import { tokens } from "./stage/tokens";
 
 const math = create(all, {});
@@ -525,6 +526,8 @@ export function buildScope() {
     Step,
     Reveal,
     Hint,
+    Deck,
+    Screen,
     Plot,
     Scene,
     Slider,

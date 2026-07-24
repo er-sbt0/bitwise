@@ -425,6 +425,33 @@ export declare function Step(props: { title?: string; children: ReactNode }): JS
  *  @tier core @status live */
 export declare function Reveal(props: { label?: string; children: ReactNode }): JSX.Element
 
+/**
+ * Present a lesson as a sequence of full-attention SCREENS — one idea each —
+ * instead of one long scroll. The deck shows exactly one `<Screen>` at a time
+ * inside a polished card, with a footer that carries the navigation: a primary
+ * **Continue** button (**Done** on the last screen), a subtle **Back**, a row of
+ * clickable progress dots with an `n / total` readout, and keyboard control
+ * (→ / Space / Enter advance, ← goes back). Screens transition with a spring
+ * slide + fade that respects `prefers-reduced-motion`.
+ *
+ * Because a screen holds the interactive figure, navigation is always explicit —
+ * a `<Slider>` or `MovablePoint` inside a screen never doubles as "next".
+ *
+ * ```tsx
+ * <Deck>
+ *   <Screen title="A guess">…one figure + a little prose…</Screen>
+ *   <Screen title="Refine it">…</Screen>
+ * </Deck>
+ * ```
+ * @tier core @status live
+ */
+export declare function Deck(props: { children: ReactNode }): JSX.Element
+
+/** One screen of a `<Deck>` — a titled container for a SINGLE idea (usually a
+ *  manipulable figure plus a little prose). Any SDK primitive composes inside it.
+ *  @tier core @status live */
+export declare function Screen(props: { title?: string; children: ReactNode }): JSX.Element
+
 /** Progressive hints for the nearest enclosing exercise, revealed in order.
  *  @tier core @status live */
 export declare function Hint(props: { children: ReactNode }): JSX.Element
