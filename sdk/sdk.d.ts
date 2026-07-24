@@ -238,6 +238,12 @@ export interface BeatOptions {
   ease?: Ease
   /** Seconds to wait before this beat starts. */
   delay?: number
+  /** Use a physics spring instead of an eased tween. `true` selects the
+   *  `gentle` preset; `"gentle" | "snappy" | "bouncy"` pick a named preset; an
+   *  object sets `{ stiffness, damping, mass }` (merged over `gentle`, so a
+   *  partial object works). A spring is self-timed — do NOT combine it with
+   *  `duration`/`ease`. Note `transformTo` already springs by default. */
+  spring?: boolean | "gentle" | "snappy" | "bouncy" | { stiffness?: number; damping?: number; mass?: number }
 }
 
 /** One unit of scripted motion, produced by the beat builders and handed to
@@ -267,7 +273,10 @@ export declare function useDirector(): Director
  *  @tier core @status live */
 export declare function drawTo(mark: Mark, opts?: BeatOptions): Beat
 
-/** Move a handle-bound mark by animating its own position values.
+/** Move a handle-bound mark by animating its own position values. Movement
+ *  springs by default (the `gentle` preset) for a natural, physical settle;
+ *  pass a `duration` or `ease` to fall back to an eased tween, or a `spring`
+ *  opt to choose a different spring.
  *  @tier core @status live */
 export declare function transformTo(
   mark: Mark,

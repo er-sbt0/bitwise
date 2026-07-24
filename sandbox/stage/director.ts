@@ -10,6 +10,7 @@ import { animate } from "motion/react";
 import { delay as clockDelay, prefersReducedMotion } from "./clock";
 import type { Mark } from "./mark";
 import { track } from "./store";
+import { tokens } from "./tokens";
 
 export type Ease =
   | "linear"
@@ -26,8 +27,34 @@ export type Ease =
   | [number, number, number, number]
   | ((t: number) => number);
 
+/** A spring request: `true`/a preset name selects a `tokens.spring` preset, an
+ *  object overrides those params over the `gentle` base. */
+export type SpringOpt =
+  | boolean
+  | "gentle"
+  | "snappy"
+  | "bouncy"
+  | { stiffness?: number; damping?: number; mass?: number };
+
 /** Durations and delays are in SECONDS throughout the authoring surface. */
-export type BeatOpts = { duration?: number; ease?: Ease; delay?: number };
+export type BeatOpts = {
+  duration?: number;
+  ease?: Ease;
+  delay?: number;
+  /** Use a spring instead of an eased tween. `true` → the `gentle` preset. */
+  spring?: SpringOpt;
+};
+
+type SpringParams = { stiffness: number; damping: number; mass?: number };
+
+/** Resolve a `spring` opt to Motion spring params, or `null` for no spring. */
+function resolveSpring(spring: SpringOpt | undefined): SpringParams | null {
+  if (!spring) return null; // false / undefined → eased tween
+  if (spring === true) return { ...tokens.spring.gentle };
+  if (typeof spring === "string") return { ...tokens.spring[spring] };
+  // A partial object merges over `gentle` so `{ damping: 12 }` still has a stiffness.
+  return { ...tokens.spring.gentle, ...spring };
+}
 
 /** Plumbing handed to a beat at play time. Authors compose beats, never this. */
 export type BeatContext = {
@@ -79,12 +106,15 @@ function createDirector() {
       mv.set(to);
       return Promise.resolve();
     }
+    const delay = opts.delay ?? 0;
+    const spring = resolveSpring(opts.spring);
+    // A spring is self-timed: never pass duration/ease alongside it. Otherwise
+    // fall back to the eased tween, unchanged.
+    const transition = spring
+      ? { type: "spring" as const, ...spring, delay }
+      : { duration: opts.duration ?? DEFAULT_DURATION, ease: opts.ease ?? "easeInOut", delay };
     return new Promise<void>((resolve) => {
-      const controls = animate(mv, to, {
-        duration: opts.duration ?? DEFAULT_DURATION,
-        ease: opts.ease ?? "easeInOut",
-        delay: opts.delay ?? 0,
-      });
+      const controls = animate(mv, to, transition);
       const entry: Cancellable = { stop: () => (controls.stop(), finish()) };
       // delete() as the guard: whichever of completion / cancellation lands
       // first resolves, the other is a no-op. An awaiting beat can never hang.
@@ -187,11 +217,19 @@ export const drawTo =
   (ctx) =>
     ctx.tween(mark, "pathLength", 1, opts);
 
-/** Move a handle-bound mark. Every key of `target` is tweened in step. */
+/** Move a handle-bound mark. Every key of `target` is tweened in step.
+ *  Movement springs (`gentle`) by DEFAULT: if the author gave no duration, no
+ *  ease and no spring, inject the gentle spring. An explicit duration/ease keeps
+ *  the eased tween; an explicit spring is honored. */
 export const transformTo =
   (mark: Mark, target: Record<string, number>, opts?: BeatOpts): Beat =>
   async (ctx) => {
-    await Promise.all(Object.entries(target).map(([k, v]) => ctx.tween(mark, k, v, opts)));
+    const o = opts ?? {};
+    const eff: BeatOpts =
+      o.duration === undefined && o.ease === undefined && o.spring === undefined
+        ? { ...o, spring: true }
+        : o;
+    await Promise.all(Object.entries(target).map(([k, v]) => ctx.tween(mark, k, v, eff)));
   };
 
 export const fadeTo =
