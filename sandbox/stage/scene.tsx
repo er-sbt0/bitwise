@@ -38,6 +38,23 @@ export const COLORS: Record<string, string> = {
 };
 export const col = (c?: string) => COLORS[c ?? "blue"] ?? COLORS.blue;
 
+/**
+ * Scene-kit colour resolver — a superset of `col` that the bespoke drawing atoms
+ * accept. Unlike `col` (brand names only, always falls back to blue), this also
+ * maps the neutral token names (`line`/`text`/`paper`/`surface`/…) and passes a
+ * literal CSS colour (`#…`, `rgb(…)`, `hsl(…)`) straight through, so an author
+ * can reach for an exact hue without leaving the token system entirely. Anything
+ * unrecognised falls back to `fallback` (blue by default). `col` is untouched —
+ * other code binds to its exact "unknown ⇒ blue" contract.
+ */
+export function resolveColor(c?: string, fallback: string = tokens.color.blue): string {
+  if (!c) return fallback;
+  const tok = (tokens.color as Record<string, string>)[c];
+  if (tok) return tok;
+  if (/^(#|rgb|hsl)/i.test(c)) return c;
+  return fallback;
+}
+
 // ---- the one transform source ----------------------------------------------
 
 /** Figure units ⇄ pixels, handed to `<Custom>` and used by every wrapper. */
@@ -417,4 +434,410 @@ export const Plot = Object.assign(PlotRoot, {
   Segment,
   Polygon,
   MovablePoint,
+});
+
+// ---- the scene kit ----------------------------------------------------------
+//
+// `Scene` is `Plot`'s sibling for BESPOKE CONCRETE PICTURES — a pixel grid, a
+// lattice, rearranged squares — the opposite of a curve-on-axes plot. It rides
+// the exact same substrate (Mafs + `useToPx` + the pixel-space child pattern),
+// so everything above about how a mark binds applies here verbatim; only the
+// defaults differ (no axes, square units, a 0..10 canvas). `<Custom>` works
+// inside a `<Scene>` unchanged, because both share one Mafs transform context.
+
+/** The scene's view region, so an atom (`Scene.Grid`) can default its own region
+ *  to "the whole canvas" without the author restating the numbers. */
+const SceneViewCtx = React.createContext<{ x: [number, number]; y: [number, number] }>({
+  x: [0, 10],
+  y: [0, 10],
+});
+
+const sort2 = ([a, b]: [number, number]): [number, number] => (a <= b ? [a, b] : [b, a]);
+
+/** Transitions off entirely under a reduced-motion preference — the grid recolor
+ *  is the one animation the scene kit owns, and it must respect the OS setting. */
+const prefersReducedMotion = () =>
+  typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+export type SceneProps = {
+  x?: [number, number];
+  y?: [number, number];
+  height?: number;
+  preserveAspect?: boolean;
+  background?: string;
+  children?: React.ReactNode;
+};
+
+/** A plane fill behind everything, covering the (bled) view rect in pixel space. */
+function SceneBackground({ color, x, y }: { color: string; x: [number, number]; y: [number, number] }) {
+  const t = useToPx();
+  const [x0, x1] = bleed(x);
+  const [y0, y1] = bleed(y);
+  const px0 = t.xToPx(x0);
+  const px1 = t.xToPx(x1);
+  const py0 = t.yToPx(y0);
+  const py1 = t.yToPx(y1);
+  return (
+    <rect
+      x={Math.min(px0, px1)}
+      y={Math.min(py0, py1)}
+      width={Math.abs(px1 - px0)}
+      height={Math.abs(py1 - py0)}
+      fill={resolveColor(color)}
+    />
+  );
+}
+
+function SceneRoot({
+  x = [0, 10],
+  y = [0, 10],
+  height = 360,
+  // Bespoke pictures want SQUARE units (a pixel grid's cells must look square),
+  // so unlike Plot the aspect ratio is preserved by default.
+  preserveAspect = true,
+  background,
+  children,
+}: SceneProps) {
+  return (
+    <div className="bw-scene">
+      <Mafs
+        width="auto"
+        height={height}
+        pan={false}
+        zoom={false}
+        ssr
+        preserveAspectRatio={preserveAspect ? "contain" : false}
+        viewBox={{ x: bleed(x), y: bleed(y), padding: 0 }}
+      >
+        {/* No <Coordinates.*>: a scene is a blank canvas, not a graph. */}
+        {background && <SceneBackground color={background} x={x} y={y} />}
+        <SceneViewCtx.Provider value={{ x, y }}>{children}</SceneViewCtx.Provider>
+      </Mafs>
+    </div>
+  );
+}
+
+// ---- scene atoms ------------------------------------------------------------
+
+type GridFill = string | ((row: number, col: number, index: number) => string);
+type GridProps = {
+  rows: number;
+  cols: number;
+  x?: [number, number];
+  y?: [number, number];
+  fill?: GridFill;
+  gap?: number;
+  radius?: number;
+};
+
+/**
+ * THE centerpiece: a `rows`×`cols` grid of cells filling a rectangular region.
+ * `index` runs 0..rows*cols-1 in ROW-MAJOR order with row 0 at the TOP, so a
+ * per-cell `fill(row, col, index)` reads like text. Each cell CSS-transitions its
+ * fill so a slider-driven recolor (the Bayes-as-100-pixels move) animates smoothly
+ * — unless the viewer prefers reduced motion, where the transition is dropped.
+ */
+function Grid({ rows, cols, x, y, fill = "blue", gap = 0.08, radius = 0 }: GridProps) {
+  const t = useToPx();
+  const view = React.useContext(SceneViewCtx);
+  const [rx0, rx1] = sort2(x ?? view.x);
+  const [ry0, ry1] = sort2(y ?? view.y);
+  const cellW = (rx1 - rx0) / cols;
+  const cellH = (ry1 - ry0) / rows;
+  const pxPerX = Math.abs(t.xToPx(1) - t.xToPx(0)) || 1;
+  const pxPerY = Math.abs(t.yToPx(1) - t.yToPx(0)) || 1;
+  const transition = prefersReducedMotion() ? "none" : "fill 300ms ease";
+  const getFill: (r: number, c: number, i: number) => string =
+    typeof fill === "function" ? fill : () => fill;
+
+  const rects: React.ReactNode[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let colIx = 0; colIx < cols; colIx++) {
+      const index = row * cols + colIx;
+      const gx0 = rx0 + colIx * cellW + gap / 2;
+      const gx1 = rx0 + (colIx + 1) * cellW - gap / 2;
+      const gyTop = ry1 - row * cellH - gap / 2; //     higher y  → smaller pixel-y
+      const gyBot = ry1 - (row + 1) * cellH + gap / 2; // lower y  → larger  pixel-y
+      const px = t.xToPx(gx0);
+      const py = t.yToPx(gyTop);
+      const w = Math.max(0, Math.abs(t.xToPx(gx1) - px));
+      const h = Math.max(0, Math.abs(t.yToPx(gyBot) - py));
+      rects.push(
+        <rect
+          key={index}
+          x={px}
+          y={py}
+          width={w}
+          height={h}
+          rx={radius * pxPerX}
+          ry={radius * pxPerY}
+          style={{ fill: resolveColor(getFill(row, colIx, index)), transition }}
+        />,
+      );
+    }
+  }
+  return <g>{rects}</g>;
+}
+
+type SceneRectProps = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color?: string;
+  fillOpacity?: number;
+  radius?: number;
+  mark?: Mark;
+};
+
+/** A filled + stroked rounded rect. `(x, y)` is the LOWER-LEFT corner (y-up). */
+function SceneRect({ x, y, width, height, color, fillOpacity = 0.15, radius = 0, mark }: SceneRectProps) {
+  const t = useToPx();
+  const c = resolveColor(color);
+  const pxPerX = Math.abs(t.xToPx(1) - t.xToPx(0)) || 1;
+  const pxPerY = Math.abs(t.yToPx(1) - t.yToPx(0)) || 1;
+  const px = t.xToPx(x);
+  const py = t.yToPx(y + height); // top edge in figure units → smallest pixel-y
+  const w = Math.abs(t.xToPx(x + width) - px);
+  const h = Math.abs(t.yToPx(y) - py);
+  return (
+    <rect
+      ref={(el) => mark?.attach(el, { draw: false })}
+      x={px}
+      y={py}
+      width={w}
+      height={h}
+      rx={radius * pxPerX}
+      ry={radius * pxPerY}
+      fill={c}
+      fillOpacity={fillOpacity}
+      stroke={c}
+      strokeWidth={tokens.stroke.base}
+    />
+  );
+}
+
+type SceneCircleProps = {
+  x: number;
+  y: number;
+  r: number;
+  color?: string;
+  fillOpacity?: number;
+  mark?: Mark;
+};
+
+/** A filled + stroked circle. `r` is measured in x-units. */
+function SceneCircle({ x, y, r, color, fillOpacity = 0.15, mark }: SceneCircleProps) {
+  const t = useToPx();
+  const c = resolveColor(color);
+  const pxPerX = Math.abs(t.xToPx(1) - t.xToPx(0)) || 1;
+  return (
+    <circle
+      ref={(el) => mark?.attach(el, { draw: false })}
+      cx={t.xToPx(x)}
+      cy={t.yToPx(y)}
+      r={r * pxPerX}
+      fill={c}
+      fillOpacity={fillOpacity}
+      stroke={c}
+      strokeWidth={tokens.stroke.base}
+    />
+  );
+}
+
+type SceneLineProps = {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  color?: string;
+  strokeWidth?: number;
+  dashed?: boolean;
+  mark?: Mark;
+};
+
+/** A straight line with draw-on reveal (`mark`, draw:true) and an optional dash —
+ *  same mask-based approach as `Plot.Segment`, so dashes and the reveal coexist. */
+function SceneLine({ x1, y1, x2, y2, color, strokeWidth = tokens.stroke.base, dashed, mark }: SceneLineProps) {
+  const t = useToPx();
+  const id = useSvgId("bwsceneline");
+  const ax = t.xToPx(x1);
+  const ay = t.yToPx(y1);
+  const bx = t.xToPx(x2);
+  const by = t.yToPx(y2);
+  const c = resolveColor(color);
+  return (
+    <>
+      {dashed && (
+        <mask id={id} maskUnits="userSpaceOnUse" x={-9999} y={-9999} width={19998} height={19998}>
+          <line x1={ax} y1={ay} x2={bx} y2={by} stroke="#fff" strokeWidth={strokeWidth + 2} strokeDasharray="7 5" />
+        </mask>
+      )}
+      <line
+        ref={(el) => mark?.attach(el, { draw: true })}
+        x1={ax}
+        y1={ay}
+        x2={bx}
+        y2={by}
+        stroke={c}
+        strokeWidth={strokeWidth}
+        strokeLinecap="butt"
+        mask={dashed ? `url(#${id})` : undefined}
+      />
+    </>
+  );
+}
+
+type SceneArrowProps = {
+  from: [number, number];
+  to: [number, number];
+  color?: string;
+  strokeWidth?: number;
+  mark?: Mark;
+};
+
+/** Shaft `from → to` plus an arrowhead at `to`. Barbs sweep BACK from the tip,
+ *  splayed ±0.4 rad, ~10px long — computed in pixel space (the `newton` barb math). */
+function SceneArrow({ from, to, color, strokeWidth = tokens.stroke.base, mark }: SceneArrowProps) {
+  const t = useToPx();
+  const c = resolveColor(color);
+  const ax = t.xToPx(from[0]);
+  const ay = t.yToPx(from[1]);
+  const cx = t.xToPx(to[0]);
+  const cy = t.yToPx(to[1]);
+  const ang = Math.atan2(cy - ay, cx - ax);
+  const barb = 10;
+  const d =
+    `M${ax},${ay} L${cx},${cy} ` +
+    `M${cx},${cy} L${cx - barb * Math.cos(ang + 0.4)},${cy - barb * Math.sin(ang + 0.4)} ` +
+    `M${cx},${cy} L${cx - barb * Math.cos(ang - 0.4)},${cy - barb * Math.sin(ang - 0.4)}`;
+  return (
+    <path
+      ref={(el) => mark?.attach(el, { draw: true })}
+      d={d}
+      stroke={c}
+      strokeWidth={strokeWidth}
+      fill="none"
+      strokeLinecap="butt"
+      strokeLinejoin="round"
+    />
+  );
+}
+
+type SceneBracketProps = {
+  from: [number, number];
+  to: [number, number];
+  label?: string;
+  color?: string;
+  depth?: number;
+};
+
+/** A square bracket spanning `from → to`: end-ticks that stand off the span by
+ *  `depth` px, a connecting bar at that offset, and the label centered outside.
+ *  The perpendicular is computed in pixel space so `depth` is visually constant. */
+function SceneBracket({ from, to, label, color, depth = 8 }: SceneBracketProps) {
+  const t = useToPx();
+  const c = resolveColor(color, tokens.color.text);
+  const ax = t.xToPx(from[0]);
+  const ay = t.yToPx(from[1]);
+  const bx = t.xToPx(to[0]);
+  const by = t.yToPx(to[1]);
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len; // unit normal (span direction rotated +90°)
+  const ny = dx / len;
+  const a2x = ax + nx * depth;
+  const a2y = ay + ny * depth;
+  const b2x = bx + nx * depth;
+  const b2y = by + ny * depth;
+  const d = `M${ax},${ay} L${a2x},${a2y} L${b2x},${b2y} L${bx},${by}`;
+  const mx = (a2x + b2x) / 2 + nx * 12;
+  const my = (a2y + b2y) / 2 + ny * 12;
+  return (
+    <g>
+      <path d={d} stroke={c} strokeWidth={tokens.stroke.base} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+      {label && (
+        <text
+          x={mx}
+          y={my}
+          fontSize={13}
+          fill={c}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          className="mafs-shadow"
+        >
+          {label}
+        </text>
+      )}
+    </g>
+  );
+}
+
+type SceneRegionProps = {
+  points: [number, number][];
+  color?: string;
+  fillOpacity?: number;
+  mark?: Mark;
+};
+
+/** A filled polygon (the `Plot.Polygon` figure, exposed under Scene). */
+function SceneRegion({ points, color, fillOpacity = 0.15, mark }: SceneRegionProps) {
+  const t = useToPx();
+  const c = resolveColor(color);
+  const pts = points.map(([px, py]) => `${t.xToPx(px)},${t.yToPx(py)}`).join(" ");
+  return (
+    <polygon
+      ref={(el) => mark?.attach(el, { draw: true })}
+      points={pts}
+      fill={c}
+      fillOpacity={fillOpacity}
+      stroke={c}
+      strokeWidth={tokens.stroke.base}
+      strokeLinejoin="round"
+    />
+  );
+}
+
+type SceneLabelProps = {
+  x: number;
+  y: number;
+  color?: string;
+  size?: number;
+  anchor?: "start" | "middle" | "end";
+  children: string;
+  mark?: Mark;
+};
+
+/** A text label, positioned in figure units but rendered in PIXEL space so its
+ *  font size stays constant regardless of the scene box. A `mark` fades it. */
+function SceneLabel({ x, y, color, size = 13, anchor = "middle", children, mark }: SceneLabelProps) {
+  const t = useToPx();
+  const c = resolveColor(color, tokens.color.text);
+  return (
+    <text
+      ref={(el) => mark?.attach(el, { draw: false })}
+      x={t.xToPx(x)}
+      y={t.yToPx(y)}
+      fontSize={size}
+      fill={c}
+      textAnchor={anchor}
+      dominantBaseline="middle"
+      className="mafs-shadow"
+      style={{ fontFamily: tokens.type.sans }}
+    >
+      {children}
+    </text>
+  );
+}
+
+export const Scene = Object.assign(SceneRoot, {
+  Grid,
+  Rect: SceneRect,
+  Circle: SceneCircle,
+  Line: SceneLine,
+  Arrow: SceneArrow,
+  Bracket: SceneBracket,
+  Region: SceneRegion,
+  Label: SceneLabel,
 });

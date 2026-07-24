@@ -500,6 +500,105 @@ export declare const Plot: PlotComponent
 export type Color = "blue" | "coral" | "green" | "violet" | "orange" | "ink"
 export type LineStyle = "solid" | "dashed" | "dotted"
 
+// ────────────────────────────────────────────────────────────────────────────
+// 5b · Scene — a blank canvas for BESPOKE CONCRETE PICTURES  (backed by Mafs)
+// ────────────────────────────────────────────────────────────────────────────
+//
+// `Scene` is `Plot`'s sibling for pictures that are NOT a curve on axes: a pixel
+// grid that recolors as a slider drags, a lattice, rearranged squares, a shaded
+// area with a bracket and a caption. It shares Plot's substrate and conventions
+// — positions are FIGURE units, y-up; sizes that must look constant (labels,
+// arrowheads, stroke widths) are pixels — but draws NO axes and preserves the
+// aspect ratio by default, so a grid cell reads square. `<Custom>` works inside
+// a `<Scene>` unchanged; both share one coordinate context.
+
+/** A colour for a scene atom: a token name (`"blue"`, `"coral"`, … or a neutral
+ *  like `"line"`/`"text"`/`"paper"`), or a literal CSS colour (`"#e0554d"`,
+ *  `"rgb(...)"`, `"hsl(...)"`). Unknown strings fall back to a sensible default. */
+export type SceneColor = Color | string
+
+export interface SceneProps {
+  /** Visible region, FIGURE units, y-up. Default `[0, 10]` on both axes. */
+  x?: [number, number]
+  y?: [number, number]
+  height?: number
+  /** Keep units square so a grid's cells look square. Default **true** (the
+   *  opposite of `Plot`) — turn it off only for a deliberately stretched canvas. */
+  preserveAspect?: boolean
+  /** A colour to fill the whole plane behind the atoms. */
+  background?: SceneColor
+  children?: ReactNode
+}
+
+export interface SceneComponent {
+  /** The blank canvas itself. @tier core @status live */
+  (props: SceneProps): JSX.Element
+  /** THE centerpiece: a `rows`×`cols` grid of cells filling a rectangular region
+   *  (`x`/`y`, default the whole scene). `fill` is a single colour or a per-cell
+   *  `(row, col, index) => color` (index row-major, row 0 at the top). Cells
+   *  CSS-transition their fill, so a slider-driven recolor animates smoothly.
+   *  `gap` is the unit spacing between cells; `radius` the cell corner in units.
+   *  @tier core @status live */
+  Grid(props: {
+    rows: number
+    cols: number
+    x?: [number, number]
+    y?: [number, number]
+    fill?: SceneColor | ((row: number, col: number, index: number) => SceneColor)
+    gap?: number
+    radius?: number
+  }): JSX.Element
+  /** A filled + stroked rounded rectangle. `(x, y)` is the lower-left corner.
+   *  @tier core @status live */
+  Rect(props: {
+    x: number
+    y: number
+    width: number
+    height: number
+    color?: SceneColor
+    fillOpacity?: number
+    radius?: number
+    mark?: Mark
+  }): JSX.Element
+  /** A filled + stroked circle; `r` is in x-units. @tier core @status live */
+  Circle(props: { x: number; y: number; r: number; color?: SceneColor; fillOpacity?: number; mark?: Mark }): JSX.Element
+  /** A straight line with an optional dash and draw-on reveal (bind a `mark`).
+   *  @tier core @status live */
+  Line(props: {
+    x1: number
+    y1: number
+    x2: number
+    y2: number
+    color?: SceneColor
+    strokeWidth?: number
+    dashed?: boolean
+    mark?: Mark
+  }): JSX.Element
+  /** An arrow: shaft `from → to` with an arrowhead at `to`. @tier core @status live */
+  Arrow(props: { from: [number, number]; to: [number, number]; color?: SceneColor; strokeWidth?: number; mark?: Mark }): JSX.Element
+  /** A square bracket spanning `from → to`, with a label centered outside it.
+   *  `depth` is how far (px) the end-ticks stand off the span. @tier core @status live */
+  Bracket(props: { from: [number, number]; to: [number, number]; label?: string; color?: SceneColor; depth?: number }): JSX.Element
+  /** A filled polygon from `[x, y]` vertices. @tier core @status live */
+  Region(props: { points: [number, number][]; color?: SceneColor; fillOpacity?: number; mark?: Mark }): JSX.Element
+  /** A text label, positioned in figure units but sized in constant px.
+   *  @tier core @status live */
+  Label(props: {
+    x: number
+    y: number
+    color?: SceneColor
+    size?: number
+    anchor?: "start" | "middle" | "end"
+    children: string
+    mark?: Mark
+  }): JSX.Element
+}
+
+/** A blank canvas for bespoke concrete pictures (pixel grids, lattices,
+ *  rearranged squares). Atoms are children (`<Scene.Grid/>`, `<Scene.Label/>`, …).
+ *  @tier core @status live */
+export declare const Scene: SceneComponent
+
 /** A number line for 1-D concepts (intervals, inequalities, sequences).
  *  @tier ext @status planned */
 export declare function NumberLine(props: {

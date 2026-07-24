@@ -11,7 +11,7 @@ import { useStage, setStageEmit } from "./stage/store";
 import { useMark } from "./stage/mark";
 import { useDirector, drawTo, transformTo, fadeTo, call, sequence, parallel, stagger, wait } from "./stage/director";
 import { useSimulation } from "./stage/sim";
-import { Plot, Custom } from "./stage/scene";
+import { Plot, Scene, Custom } from "./stage/scene";
 import { tokens } from "./stage/tokens";
 
 const math = create(all, {});
@@ -526,6 +526,7 @@ export function buildScope() {
     Reveal,
     Hint,
     Plot,
+    Scene,
     Slider,
     Toggle,
     NumberInput,
