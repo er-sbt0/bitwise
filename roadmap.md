@@ -15,7 +15,11 @@ only durable thing we build.
 > *unprompted* and mounted interactively in ~80–95s. It "can" — but it comes back
 > **narrow and plain**: every concept funnels into one Cartesian plot, craft is
 > flat, and the only hard gate is answer-correctness, so nothing pulls the *look*
-> upward. **Direction sharpened (2026-07-24): craft-first, gates off,
+> upward. **Phase 3's first brick has now landed (2026-07-24):** the tokens →
+> Scene kit → spring director → Deck slice is built and renders end-to-end on
+> *Bayes as a 100-pixel grid* — a bespoke concrete picture, not a plot (details in
+> Phase 3 below); next is proving it in a live generation. **Direction sharpened
+> (2026-07-24): craft-first, gates off,
 > LLM-as-artist.** Phase 3 raises the *look and depth* by handing the model a
 > robust engine of programmatic building blocks it composes as the artist — and we
 > **drop the verification machinery** (the CAS answer-gate, the planned vision-eval,
@@ -229,29 +233,33 @@ now, implement one substrate now.
   whether a name is approved, only whether it exists, so it costs the author no
   freedom. It also catches what mounting cannot: a bad name inside an `onClick`
   renders perfectly and explodes under the learner's cursor.
-- **Phase 3 — brilliant-grade craft (freeform-first). NEXT (chosen 2026-07-24).**
+- **Phase 3 — brilliant-grade craft (freeform-first). IN PROGRESS — first brick
+  landed 2026-07-24.**
   Phase 2 proved the model *can* compose the Stage; it comes back narrow and plain
   because the only few-shot is a Cartesian plot — so the model imitates
   curve-on-axes and nothing rewards the *look*. Phase 3 changes **what the model
   imitates** and **what the engine hands it**, along a menu of craft goals we pull
   from **one at a time** (not a batch — each is a TODO in its own right):
-  - **Scene kit — breadth.** Promote `<Custom>` from a Plot escape-hatch to a
-    standalone **`<Scene>`** that owns its coordinate space and hands the author a
-    house-styled **drawing kit**: arrows, brackets, dot-grids, tokens/counters,
-    shaded regions, shapes, labels — low-level *atoms*, not typed charts. Bespoke
-    concrete pictures (a pixel grid, a lattice, rearranged squares), not another
-    chart type. **Replace the Newton plot few-shot** with non-plot bespoke-scene
-    few-shots — that example is the anchor keeping output narrow.
-  - **Deck / Screen — shape.** Stop shipping one scrolling component. A
-    **`<Deck>`/`<Screen>`** container: one idea per screen, tap-to-advance,
-    progress. The plan's `develop[]` beats *become* the screens; prose shrinks and
-    the manipulable figure becomes the star.
-  - **Design tokens + spring motion — craft.** A **tokens module** (palette, type
-    scale, spacing, radii, shadow, spring configs) consumed by BOTH the `Plot.*`
-    primitives and the scene kit, and **spring-based motion by default** (Motion is
-    already a dep) in place of linear draw-on tweens — so even a naive composition
-    inherits craft.
-  - **Director / animation depth — motion.** Richer cinematic transitions on top of
+  - **Scene kit — breadth. ✅ (first cut).** Promoted `<Custom>` to a standalone
+    **`<Scene>`** — a no-axes bespoke-drawing canvas over the same Mafs transform
+    plumbing — with a house-styled, tokens-driven, mark-animatable **drawing kit**:
+    `Grid` (the pixel-grid centerpiece), `Rect`, `Circle`, `Line`, `Arrow`,
+    `Bracket`, `Region`, `Label`. Low-level *atoms*, not typed charts. Newton plot
+    few-shot **replaced** by the Bayes bespoke-scene lesson — the anchor that kept
+    output narrow is gone. *(TODO: more atoms as concepts ask — dot-grids,
+    tokens/counters; a second non-plot few-shot.)*
+  - **Deck / Screen — shape. ✅ (first cut).** Shipped a **`<Deck>`/`<Screen>`**
+    container: one idea per screen, explicit Continue/Back + clickable progress +
+    keys (not whole-surface tap, which would fight the figure's controls), spring
+    cross-fade, reduced-motion aware. The plan's `develop[]` beats *become* the
+    screens; the prompt now teaches the deck as the default shape.
+  - **Design tokens + spring motion — craft. ✅.** A **tokens module** (palette,
+    type scale, spacing, radii, shadow, stroke, spring presets, durations) now
+    feeds BOTH the `Plot.*` primitives and the scene kit, and **`transformTo`
+    springs by default** (gentle preset) — movement settles physically instead of
+    snapping. Explicit duration/ease still yields an eased tween (so newton is
+    unchanged); any beat opts into a spring.
+  - **Director / animation depth — motion. TODO.** Richer cinematic transitions on top of
     the mark-scoped director: morphing/interpolation between shapes, staged and
     staggered reveals, camera/scale moves — so a figure *performs* rather than
     snapping. (Pulled up from "fold in later"; still a standalone TODO.)
@@ -261,10 +269,19 @@ now, implement one substrate now.
     simulation-backed**. Give the prompt a simulation few-shot so live runs reach
     for it unprompted (none has yet).
 
-  **First brick.** A thin vertical slice proving *breadth* on a concept that is
-  **not** curve-shaped: tokens → scene kit → spring director → deck, end-to-end, on
-  **Bayes' theorem as a 100-pixel grid** that recolors as you drag the base rate —
-  the sharpest contrast with the plot idiom. Then widen to more concepts.
+  **First brick. ✅ LANDED 2026-07-24** (hand-authored, not live-generated yet).
+  The thin vertical slice — tokens → scene kit → spring director → deck — is built
+  and rendered end-to-end on **Bayes' theorem as a 100-pixel grid**: 100 people as
+  a 10×10 `Scene.Grid` that recolors as you drag the base rate, across tap-through
+  `Deck` screens, with a spring-director spotlight that dims the test-negatives so
+  the positives stand out, and a live `P(sick|+) = TP/(TP+FP)` readout. It reads as
+  a bespoke concrete picture, *not* a Cartesian plot — the sharpest contrast with
+  the old idiom — and mounts clean in a real browser (31-step browser test, no
+  errors; the Scene kit and Deck needed no engine fixes on first render). Built
+  across six commits (`284006b`…`dcb23f7`); `npm run eval` green throughout.
+  **Next: prove it live** — generate an unrehearsed non-plot concept and confirm
+  the model reaches for `<Scene>`/`<Deck>` on its own now that the anchor few-shot
+  is Bayes. Then widen to the ~6-concept screenshot grid.
 
   The genuinely-later items (a **physics engine** — Rapier / matter.js — behind
   `useSimulation`, and more **substrates** — Canvas / WebGL / 3D) **fold in after**
